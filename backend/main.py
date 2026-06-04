@@ -43,8 +43,8 @@ class PriceRecommendation(BaseModel):
 
 # In-memory storage for demonstration
 facilities = [
-    Facility(id=1, name="Sample Hotel", base_price=10000, total_rooms=50),
-    Facility(id=2, name="Sample Space", base_price=5000, total_rooms=10)
+    Facility(id=1, name="サンプル ホテル", base_price=10000, total_rooms=50),
+    Facility(id=2, name="サンプル スペース", base_price=5000, total_rooms=10)
 ]
 
 rules = [
@@ -142,7 +142,7 @@ def get_recommendation(facility_id: int, date: str):
     for rule in facility_rules:
         if occupancy_rate >= rule.occupancy_threshold_percent:
             recommended_price_rule = int(facility.base_price * rule.price_multiplier)
-            rule_applied = f"Occupancy >= {rule.occupancy_threshold_percent*100}% (x{rule.price_multiplier})"
+            rule_applied = f"稼働率 {int(rule.occupancy_threshold_percent*100)}% 以上 (x{rule.price_multiplier})"
             break
 
     # 2. ML-based recommendation

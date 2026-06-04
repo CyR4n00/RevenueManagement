@@ -1,21 +1,21 @@
 INFO:     Will watch for changes in these directories: ['/app/backend']
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [175617] using StatReload
-INFO:     Started server process [176176]
+INFO:     Started reloader process [207109] using StatReload
+INFO:     Started server process [208146]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 Training ML model with historical dummy data...
 ML model trained successfully!
-INFO:     127.0.0.1:55812 - "GET /facilities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55826 - "GET /facilities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55826 - "GET /occupancy?facility_id=1&date=2026-06-04 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55812 - "GET /rules?facility_id=1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55812 - "GET /recommendations/1/2026-06-04 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55812 - "GET /occupancy?facility_id=1&date=2026-06-05 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55826 - "GET /rules?facility_id=1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55826 - "GET /recommendations/1/2026-06-05 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55826 - "OPTIONS /rules/1/toggle HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55812 - "PUT /rules/1/toggle HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55826 - "GET /occupancy?facility_id=1&date=2026-06-05 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55812 - "GET /rules?facility_id=1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55812 - "GET /recommendations/1/2026-06-05 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57432 - "GET /facilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57442 - "GET /facilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57442 - "GET /occupancy?facility_id=1&date=2026-06-04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57432 - "GET /rules?facility_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57432 - "GET /recommendations/1/2026-06-04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57432 - "GET /occupancy?facility_id=2&date=2026-06-04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57442 - "GET /rules?facility_id=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57442 - "GET /recommendations/2/2026-06-04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57442 - "OPTIONS /rules/3/toggle HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57432 - "PUT /rules/3/toggle HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57442 - "GET /occupancy?facility_id=2&date=2026-06-04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57432 - "GET /rules?facility_id=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57442 - "GET /recommendations/2/2026-06-04 HTTP/1.1" 200 OK

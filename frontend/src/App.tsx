@@ -60,7 +60,7 @@ function App() {
         setSelectedFacility(response.data[0].id);
       }
     } catch (error) {
-      console.error("Error fetching facilities:", error);
+      console.error("施設の取得に失敗しました:", error);
     }
   };
 
@@ -69,7 +69,7 @@ function App() {
       const response = await axios.get(`http://localhost:8000/rules?facility_id=${facilityId}`);
       setRules(response.data);
     } catch (error) {
-      console.error("Error fetching rules:", error);
+      console.error("ルールの取得に失敗しました:", error);
     }
   };
 
@@ -83,7 +83,7 @@ function App() {
       const recResponse = await axios.get(`http://localhost:8000/recommendations/${facilityId}/${date}`);
       setRecommendation(recResponse.data);
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
+      console.error("ダッシュボードデータの取得に失敗しました:", error);
       setRecommendation(null);
       setOccupancy(null);
     }
@@ -97,7 +97,7 @@ function App() {
         fetchDashboardData(selectedFacility, selectedDate); // Recalculate recommendation
       }
     } catch (error) {
-       console.error("Error toggling rule:", error);
+       console.error("ルールの変更に失敗しました:", error);
     }
   }
 
@@ -107,7 +107,7 @@ function App() {
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-5xl mx-auto">
         <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-          <h1 className="text-3xl font-bold text-gray-800">Revenue Control Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-800">レベニューコントロール</h1>
           <div className="flex space-x-4">
              <input
               type="date"
@@ -130,72 +130,72 @@ function App() {
         {selectedFacilityData && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase">Base Price</h2>
+              <h2 className="text-sm font-semibold text-gray-500">基本価格</h2>
               <p className="text-3xl font-bold text-gray-800 mt-2">¥{selectedFacilityData.base_price.toLocaleString()}</p>
             </div>
 
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase">Occupancy ({selectedDate})</h2>
+              <h2 className="text-sm font-semibold text-gray-500">稼働率予測 ({selectedDate})</h2>
               {occupancy ? (
                 <>
                   <p className="text-3xl font-bold text-blue-600 mt-2">
                     {Math.round((occupancy.booked_rooms / selectedFacilityData.total_rooms) * 100)}%
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">{occupancy.booked_rooms} / {selectedFacilityData.total_rooms} rooms</p>
+                  <p className="text-sm text-gray-500 mt-1">{occupancy.booked_rooms} / {selectedFacilityData.total_rooms} 室</p>
                 </>
               ) : (
-                <p className="text-xl text-gray-500 mt-2">No data</p>
+                <p className="text-xl text-gray-500 mt-2">データなし</p>
               )}
             </div>
 
             <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500 transition-all duration-300">
-              <h2 className="text-sm font-semibold text-blue-500 uppercase">Rule-based Price</h2>
+              <h2 className="text-sm font-semibold text-blue-500">ルールに基づく推奨価格</h2>
               {recommendation ? (
                 <>
                   <p className="text-3xl font-bold text-gray-800 mt-2">¥{recommendation.recommended_price_rule_based.toLocaleString()}</p>
                   {recommendation.rule_applied ? (
                     <p className="text-xs font-semibold text-blue-600 bg-blue-100 inline-block px-2 py-1 rounded mt-2">
-                      Rule: {recommendation.rule_applied}
+                      適用ルール: {recommendation.rule_applied}
                     </p>
                   ) : (
                     <p className="text-xs font-semibold text-gray-500 mt-2">
-                      No active rules applied
+                      適用中のルールなし
                     </p>
                   )}
                 </>
               ) : (
-                <p className="text-xl text-gray-500 mt-2">Calculating...</p>
+                <p className="text-xl text-gray-500 mt-2">計算中...</p>
               )}
             </div>
 
             <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg shadow p-6 border-l-4 border-purple-500 relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-purple-500 text-white text-xs px-2 py-1 rounded-bl-lg font-bold">AI Prediction</div>
-              <h2 className="text-sm font-semibold text-purple-600 uppercase">ML Predicted Price</h2>
+              <div className="absolute top-0 right-0 bg-purple-500 text-white text-xs px-2 py-1 rounded-bl-lg font-bold">AI自動予測</div>
+              <h2 className="text-sm font-semibold text-purple-600">AIが予測した最適価格</h2>
               {recommendation?.recommended_price_ml_based ? (
                 <>
                   <p className="text-3xl font-bold text-gray-800 mt-2">¥{recommendation.recommended_price_ml_based.toLocaleString()}</p>
                   <p className="text-xs text-gray-500 mt-2 leading-tight">
-                    Predicted using Random Forest trained on 1-year historical data.
+                    過去1年間のデータ（稼働実績、季節性、曜日など）を元に機械学習モデルが予測
                   </p>
                 </>
               ) : (
-                <p className="text-xl text-gray-500 mt-2">Training model...</p>
+                <p className="text-xl text-gray-500 mt-2">モデル学習中...</p>
               )}
             </div>
           </div>
         )}
 
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Pricing Rules Configuration</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">価格変動ルールの設定</h2>
           <p className="text-gray-600 mb-4 text-sm">
-            Rules are evaluated in descending order of occupancy threshold. Toggle a rule to see its effect instantly on the dashboard above.
+            ルールは稼働率のしきい値が高い順に適用されます。ルールを切り替えると、即座に上部の推奨価格が再計算されます。
           </p>
           <div className="space-y-3">
              {rules.length > 0 ? rules.map(rule => (
                 <div key={rule.id} className="flex items-center justify-between bg-gray-50 p-4 rounded border">
                     <div>
                       <p className={`font-medium ${rule.active ? 'text-gray-800' : 'text-gray-400'}`}>
-                        If Occupancy &gt;= {rule.occupancy_threshold_percent * 100}%, multiply price by {rule.price_multiplier}
+                        稼働率が {rule.occupancy_threshold_percent * 100}% 以上の場合、価格を {rule.price_multiplier} 倍にする
                       </p>
                     </div>
                     <button
@@ -206,11 +206,11 @@ function App() {
                           : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                       }`}
                     >
-                      {rule.active ? 'Active' : 'Inactive'}
+                      {rule.active ? '有効' : '無効'}
                     </button>
                 </div>
              )) : (
-               <p className="text-gray-500">No rules configured for this facility.</p>
+               <p className="text-gray-500">この施設に設定されているルールはありません。</p>
              )}
           </div>
         </div>
