@@ -11,8 +11,9 @@ interface Facility {
 interface PriceRecommendation {
   facility_id: number;
   date: string;
-  recommended_price: number;
+  recommended_price_rule_based: number;
   rule_applied: string | null;
+  recommended_price_ml_based: number | null;
 }
 
 interface OccupancyData {
@@ -70,7 +71,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <header className="mb-8 flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">Revenue Control Dashboard</h1>
           <select
@@ -85,7 +86,7 @@ function App() {
         </header>
 
         {selectedFacilityData && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="bg-white rounded-lg shadow p-6">
               <h2 className="text-sm font-semibold text-gray-500 uppercase">Base Price</h2>
               <p className="text-3xl font-bold text-gray-800 mt-2">¥{selectedFacilityData.base_price.toLocaleString()}</p>
@@ -105,13 +106,13 @@ function App() {
               )}
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6 border-2 border-blue-500">
-              <h2 className="text-sm font-semibold text-blue-500 uppercase">Recommended Price</h2>
+            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+              <h2 className="text-sm font-semibold text-blue-500 uppercase">Rule-based Price</h2>
               {recommendation ? (
                 <>
-                  <p className="text-3xl font-bold text-gray-800 mt-2">¥{recommendation.recommended_price.toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-gray-800 mt-2">¥{recommendation.recommended_price_rule_based.toLocaleString()}</p>
                   {recommendation.rule_applied && (
-                    <p className="text-xs font-semibold text-green-600 bg-green-100 inline-block px-2 py-1 rounded mt-2">
+                    <p className="text-xs font-semibold text-blue-600 bg-blue-100 inline-block px-2 py-1 rounded mt-2">
                       Rule: {recommendation.rule_applied}
                     </p>
                   )}
@@ -120,11 +121,26 @@ function App() {
                 <p className="text-xl text-gray-500 mt-2">Calculating...</p>
               )}
             </div>
+
+            <div className="bg-gradient-to-br from-purple-50 to-white rounded-lg shadow p-6 border-l-4 border-purple-500 relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-purple-500 text-white text-xs px-2 py-1 rounded-bl-lg font-bold">AI Prediction</div>
+              <h2 className="text-sm font-semibold text-purple-600 uppercase">ML Predicted Price</h2>
+              {recommendation?.recommended_price_ml_based ? (
+                <>
+                  <p className="text-3xl font-bold text-gray-800 mt-2">¥{recommendation.recommended_price_ml_based.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 mt-2 leading-tight">
+                    Predicted using Random Forest trained on 1-year historical data (demand, seasonality, weekends).
+                  </p>
+                </>
+              ) : (
+                <p className="text-xl text-gray-500 mt-2">Training model...</p>
+              )}
+            </div>
           </div>
         )}
 
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Pricing Rules</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Pricing Rules Configuration</h2>
           <p className="text-gray-600 mb-4">
             Rules are evaluated in order of occupancy threshold. Currently showing active rules for the selected facility.
             (UI for adding/editing rules will be implemented here).

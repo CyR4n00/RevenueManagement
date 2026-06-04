@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import datetime
+from ml_model import ml_predictor
 
 app = FastAPI(title="Revenue Control System API")
 
@@ -23,20 +24,21 @@ class Facility(BaseModel):
 class Rule(BaseModel):
     id: int
     facility_id: int
-    occupancy_threshold_percent: float # e.g. 0.8 for 80%
-    price_multiplier: float # e.g. 1.2 for 20% increase
+    occupancy_threshold_percent: float
+    price_multiplier: float
     active: bool = True
 
 class OccupancyData(BaseModel):
     facility_id: int
-    date: str # YYYY-MM-DD
+    date: str
     booked_rooms: int
 
 class PriceRecommendation(BaseModel):
     facility_id: int
     date: str
-    recommended_price: int
+    recommended_price_rule_based: int
     rule_applied: Optional[str]
+    recommended_price_ml_based: Optional[int]
 
 # In-memory storage for demonstration
 facilities = [
@@ -54,6 +56,20 @@ occupancy_db = [
     OccupancyData(facility_id=1, date=datetime.date.today().isoformat(), booked_rooms=42), # 84% occupancy
     OccupancyData(facility_id=2, date=datetime.date.today().isoformat(), booked_rooms=9) # 90% occupancy
 ]
+
+# Initialize and train ML model with dummy data on startup
+@app.on_event("startup")
+def startup_event():
+    print("Training ML model with historical dummy data...")
+    all_data = []
+    for facility in facilities:
+        df = ml_predictor.generate_dummy_data(facility.id, facility.base_price, facility.total_rooms)
+        all_data.append(df)
+
+    if all_data:
+        combined_df = __import__("pandas").concat(all_data)
+        ml_predictor.train(combined_df)
+    print("ML model trained successfully!")
 
 @app.get("/facilities", response_model=List[Facility])
 def get_facilities():
@@ -82,26 +98,35 @@ def get_recommendation(facility_id: int, date: str):
 
     occupancy_rate = booked_rooms / facility.total_rooms if facility.total_rooms > 0 else 0
 
+    # 1. Rule-based recommendation
     facility_rules = sorted(
         [r for r in rules if r.facility_id == facility_id and r.active],
         key=lambda x: x.occupancy_threshold_percent,
         reverse=True
     )
 
-    recommended_price = facility.base_price
+    recommended_price_rule = facility.base_price
     rule_applied = None
 
     for rule in facility_rules:
         if occupancy_rate >= rule.occupancy_threshold_percent:
-            recommended_price = int(facility.base_price * rule.price_multiplier)
+            recommended_price_rule = int(facility.base_price * rule.price_multiplier)
             rule_applied = f"Occupancy >= {rule.occupancy_threshold_percent*100}%"
             break
+
+    # 2. ML-based recommendation
+    recommended_price_ml = ml_predictor.predict_optimal_price(
+        date_str=date,
+        current_occupancy_rate=occupancy_rate,
+        base_price=facility.base_price
+    )
 
     return PriceRecommendation(
         facility_id=facility_id,
         date=date,
-        recommended_price=recommended_price,
-        rule_applied=rule_applied
+        recommended_price_rule_based=recommended_price_rule,
+        rule_applied=rule_applied,
+        recommended_price_ml_based=recommended_price_ml
     )
 
 @app.post("/rules", response_model=Rule)

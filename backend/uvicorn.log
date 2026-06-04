@@ -1,16 +1,15 @@
 INFO:     Will watch for changes in these directories: ['/app/backend']
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [84987] using StatReload
-INFO:     Started server process [85023]
+INFO:     Started reloader process [142205] using StatReload
+INFO:     Started server process [142223]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     127.0.0.1:46560 - "GET /facilities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40558 - "GET /occupancy?facility_id=1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40112 - "GET /recommendations/1/2026-06-03 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:37358 - "GET /recommendations/2/2026-06-03 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55702 - "GET /facilities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55710 - "GET /facilities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55710 - "GET /occupancy?facility_id=1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55710 - "GET /recommendations/1/2026-06-03 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55710 - "GET /occupancy?facility_id=2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55710 - "GET /recommendations/2/2026-06-03 HTTP/1.1" 200 OK
+Training ML model with historical dummy data...
+ML model trained successfully!
+INFO:     127.0.0.1:57804 - "GET /recommendations/1/2026-06-04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40054 - "GET /facilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40060 - "GET /facilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40060 - "GET /occupancy?facility_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40060 - "GET /recommendations/1/2026-06-04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40060 - "GET /occupancy?facility_id=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40060 - "GET /recommendations/2/2026-06-04 HTTP/1.1" 200 OK
