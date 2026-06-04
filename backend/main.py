@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import datetime
+import random
 from ml_model import ml_predictor
 
 app = FastAPI(title="Revenue Control System API")
@@ -47,17 +48,32 @@ facilities = [
 ]
 
 rules = [
-    Rule(id=1, facility_id=1, occupancy_threshold_percent=0.8, price_multiplier=1.3),
-    Rule(id=2, facility_id=1, occupancy_threshold_percent=0.5, price_multiplier=1.1),
-    Rule(id=3, facility_id=2, occupancy_threshold_percent=0.9, price_multiplier=1.5)
+    Rule(id=1, facility_id=1, occupancy_threshold_percent=0.8, price_multiplier=1.3, active=True),
+    Rule(id=2, facility_id=1, occupancy_threshold_percent=0.5, price_multiplier=1.1, active=True),
+    Rule(id=3, facility_id=2, occupancy_threshold_percent=0.9, price_multiplier=1.5, active=True)
 ]
 
-occupancy_db = [
-    OccupancyData(facility_id=1, date=datetime.date.today().isoformat(), booked_rooms=42), # 84% occupancy
-    OccupancyData(facility_id=2, date=datetime.date.today().isoformat(), booked_rooms=9) # 90% occupancy
-]
+# dynamic generation for mock
+def get_mock_occupancy(facility_id: int, date_str: str) -> int:
+    facility = next((f for f in facilities if f.id == facility_id), None)
+    if not facility:
+        return 0
 
-# Initialize and train ML model with dummy data on startup
+    # Use date as a seed so it's consistent for the same date but varies across dates
+    seed_str = f"{facility_id}_{date_str}"
+    random.seed(seed_str)
+
+    target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+
+    # Simulate higher demand on weekends
+    if target_date.weekday() >= 5:
+        base_rate = random.uniform(0.7, 1.0)
+    else:
+        base_rate = random.uniform(0.3, 0.7)
+
+    return int(base_rate * facility.total_rooms)
+
+
 @app.on_event("startup")
 def startup_event():
     print("Training ML model with historical dummy data...")
@@ -81,11 +97,28 @@ def get_rules(facility_id: Optional[int] = None):
         return [r for r in rules if r.facility_id == facility_id]
     return rules
 
+@app.put("/rules/{rule_id}/toggle", response_model=Rule)
+def toggle_rule(rule_id: int):
+    rule = next((r for r in rules if r.id == rule_id), None)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    rule.active = not rule.active
+    return rule
+
 @app.get("/occupancy", response_model=List[OccupancyData])
-def get_occupancy(facility_id: Optional[int] = None):
-    if facility_id:
-        return [o for o in occupancy_db if o.facility_id == facility_id]
-    return occupancy_db
+def get_occupancy(facility_id: Optional[int] = None, date: Optional[str] = None):
+    # Dynamic dummy data for demo purposes
+    if not date:
+        date = datetime.date.today().isoformat()
+
+    result = []
+    target_facilities = [f for f in facilities if f.id == facility_id] if facility_id else facilities
+
+    for f in target_facilities:
+        booked = get_mock_occupancy(f.id, date)
+        result.append(OccupancyData(facility_id=f.id, date=date, booked_rooms=booked))
+
+    return result
 
 @app.get("/recommendations/{facility_id}/{date}", response_model=PriceRecommendation)
 def get_recommendation(facility_id: int, date: str):
@@ -93,9 +126,7 @@ def get_recommendation(facility_id: int, date: str):
     if not facility:
         raise HTTPException(status_code=404, detail="Facility not found")
 
-    occupancy = next((o for o in occupancy_db if o.facility_id == facility_id and o.date == date), None)
-    booked_rooms = occupancy.booked_rooms if occupancy else 0
-
+    booked_rooms = get_mock_occupancy(facility_id, date)
     occupancy_rate = booked_rooms / facility.total_rooms if facility.total_rooms > 0 else 0
 
     # 1. Rule-based recommendation
@@ -111,7 +142,7 @@ def get_recommendation(facility_id: int, date: str):
     for rule in facility_rules:
         if occupancy_rate >= rule.occupancy_threshold_percent:
             recommended_price_rule = int(facility.base_price * rule.price_multiplier)
-            rule_applied = f"Occupancy >= {rule.occupancy_threshold_percent*100}%"
+            rule_applied = f"Occupancy >= {rule.occupancy_threshold_percent*100}% (x{rule.price_multiplier})"
             break
 
     # 2. ML-based recommendation
@@ -128,8 +159,3 @@ def get_recommendation(facility_id: int, date: str):
         rule_applied=rule_applied,
         recommended_price_ml_based=recommended_price_ml
     )
-
-@app.post("/rules", response_model=Rule)
-def create_rule(rule: Rule):
-    rules.append(rule)
-    return rule
