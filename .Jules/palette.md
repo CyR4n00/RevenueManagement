@@ -1,0 +1,2 @@
+## 2024-05-24 - Init\n**Learning:** Just starting\n**Action:** Start looking for UX enhancements.
+## 2024-05-24 - Accessibility on Form Inputs and Toggles\n**Learning:** The simple dropdowns and date inputs on the main dashboard lacked context for screen readers, and the toggle buttons just read 'Active'/'Inactive' without providing context on *what* rule was being toggled.\n**Action:** Add `aria-label`, `title`, and screen-reader only (`sr-only`) labels for inputs. Apply `aria-pressed` and dynamic `aria-label` for toggle buttons to describe the action.

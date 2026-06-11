@@ -109,16 +109,24 @@ function App() {
         <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
           <h1 className="text-3xl font-bold text-gray-800">レベニューコントロール</h1>
           <div className="flex space-x-4">
-             <input
+            <label htmlFor="date-select" className="sr-only">日付を選択</label>
+            <input
+              id="date-select"
               type="date"
               className="p-2 border rounded shadow-sm focus:ring focus:ring-blue-200"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
+              title="日付を選択"
+              aria-label="日付を選択"
             />
+            <label htmlFor="facility-select" className="sr-only">施設を選択</label>
             <select
+              id="facility-select"
               className="p-2 border rounded shadow-sm focus:ring focus:ring-blue-200"
               value={selectedFacility || ''}
               onChange={(e) => setSelectedFacility(Number(e.target.value))}
+              title="施設を選択"
+              aria-label="施設を選択"
             >
               {facilities.map(f => (
                 <option key={f.id} value={f.id}>{f.name}</option>
@@ -205,6 +213,8 @@ function App() {
                           ? 'bg-green-100 text-green-700 hover:bg-green-200'
                           : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                       }`}
+                      aria-pressed={rule.active}
+                      aria-label={`稼働率が ${rule.occupancy_threshold_percent * 100}% 以上の場合、価格を ${rule.price_multiplier} 倍にするルールを${rule.active ? '無効' : '有効'}にする`}
                     >
                       {rule.active ? '有効' : '無効'}
                     </button>
