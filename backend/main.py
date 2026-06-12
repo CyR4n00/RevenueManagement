@@ -5,14 +5,14 @@ from typing import List, Optional
 import datetime
 import random
 from ml_model import ml_predictor
-from models import Facility, IntegrationSettings, SyncStatus
+from models import Facility, IntegrationSettings, SyncStatus, RuleCreate
 
 app = FastAPI(title="Revenue Control System API")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False, # Fixed CORS issue
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -51,8 +51,8 @@ class SuggestionData(BaseModel):
 
 # In-memory storage for demonstration
 facilities = [
-    Facility(id=1, name="サンプル ホテル", base_price=10000, min_price=6000, max_price=20000, total_rooms=50, max_sell_rooms=48, plan="Enterprise"),
-    Facility(id=2, name="サンプル ゲストハウス", base_price=5000, min_price=3000, max_price=10000, total_rooms=10, max_sell_rooms=10, plan="Standard")
+    Facility(id=1, name="サンプル ホテル", base_price=10000, min_price=6000, max_price=20000, total_rooms=50, max_sell_rooms=48, plan="Enterprise", custom_event_multiplier=1.2),
+    Facility(id=2, name="サンプル ゲストハウス", base_price=5000, min_price=3000, max_price=10000, total_rooms=10, max_sell_rooms=10, plan="Standard", custom_event_multiplier=1.1)
 ]
 
 integration_settings_db = {
@@ -65,11 +65,12 @@ rules = [
     Rule(id=2, facility_id=1, occupancy_threshold_percent=0.5, price_multiplier=1.1, active=True),
     Rule(id=3, facility_id=2, occupancy_threshold_percent=0.9, price_multiplier=1.5, active=True)
 ]
+rule_id_counter = 4
 
-def get_event_multiplier(date_str: str) -> float:
+def get_event_multiplier(date_str: str, custom_multiplier: float) -> float:
     target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-    if target_date.weekday() in [4, 5]:
-        return 1.2
+    if target_date.weekday() in [4, 5]: # Friday, Saturday
+        return custom_multiplier
     return 1.0
 
 def get_mock_occupancy(facility_id: int, date_str: str) -> int:
@@ -104,12 +105,6 @@ def startup_event():
 def get_facilities():
     return facilities
 
-@app.post("/facilities", response_model=Facility)
-def create_facility(f: Facility):
-    facilities.append(f)
-    integration_settings_db[f.id] = IntegrationSettings(facility_id=f.id, sync_mode="daily")
-    return f
-
 @app.put("/facilities/{f_id}", response_model=Facility)
 def update_facility(f_id: int, updated_f: Facility):
     for i, f in enumerate(facilities):
@@ -134,8 +129,6 @@ def get_sync_status(f_id: int):
     settings = integration_settings_db.get(f_id)
     if not settings:
         raise HTTPException(status_code=404, detail="Settings not found")
-
-    # Mock sync status based on plan
     status = "success"
     msg = "正常に同期完了しました。"
     if settings.sync_mode == "auto_optimize":
@@ -168,6 +161,29 @@ def get_rules(facility_id: Optional[int] = None):
         return [r for r in rules if r.facility_id == facility_id]
     return rules
 
+@app.post("/rules", response_model=Rule)
+def create_rule(rule_in: RuleCreate):
+    global rule_id_counter
+    new_rule = Rule(
+        id=rule_id_counter,
+        facility_id=rule_in.facility_id,
+        occupancy_threshold_percent=rule_in.occupancy_threshold_percent,
+        price_multiplier=rule_in.price_multiplier,
+        active=rule_in.active
+    )
+    rules.append(new_rule)
+    rule_id_counter += 1
+    return new_rule
+
+@app.delete("/rules/{rule_id}")
+def delete_rule(rule_id: int):
+    global rules
+    initial_len = len(rules)
+    rules = [r for r in rules if r.id != rule_id]
+    if len(rules) == initial_len:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return {"status": "ok"}
+
 @app.put("/rules/{rule_id}/toggle", response_model=Rule)
 def toggle_rule(rule_id: int):
     rule = next((r for r in rules if r.id == rule_id), None)
@@ -194,12 +210,11 @@ def get_recommendation(facility_id: int, date: str):
         raise HTTPException(status_code=404, detail="Facility not found")
 
     booked_rooms = get_mock_occupancy(facility_id, date)
-    # オーバーブッキング防止: 実際の稼働率は総部屋数ではなく、販売上限(max_sell_rooms)をベースに計算
     occupancy_rate = booked_rooms / facility.max_sell_rooms if facility.max_sell_rooms > 0 else 0
 
     event_mult = 1.0
     if facility.plan in ["Pro", "Enterprise"]:
-        event_mult = get_event_multiplier(date)
+        event_mult = get_event_multiplier(date, facility.custom_event_multiplier)
 
     facility_rules = sorted(
         [r for r in rules if r.facility_id == facility_id and r.active],
@@ -252,17 +267,14 @@ def get_performance(facility_id: int):
 
 @app.get("/suggestions/{facility_id}", response_model=SuggestionData)
 def get_suggestion(facility_id: int):
-    # PDCAサイクルの「検証・改善点提示」モック
     suggestions = [
         "【AIからの提案】直近3ヶ月で、金曜日の実際の稼働率が目標を下回っています。週末のベース価格を5%下げるか、イベント時の上乗せ倍率を1.2倍から1.1倍に調整することを推奨します。",
         "【AIからの提案】先月、設定された『下限価格』で販売された日数が10日ありました。オフシーズンのため、下限価格を一時的に3,000円から2,500円に引き下げることで、機会損失を防げる可能性があります。",
         "【AIからの提案】オーバーブッキング防止のためブロックしている2室について、キャンセル率が低いためブロックを1室に減らしても安全です。"
     ]
-
     seed_str = f"sugg_{facility_id}_{datetime.date.today().isoformat()}"
     random.seed(seed_str)
     sug = random.choice(suggestions)
-
     return SuggestionData(
         facility_id=facility_id,
         date_generated=datetime.date.today().isoformat(),

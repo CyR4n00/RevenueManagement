@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { SettingsPanel } from './SettingsPanel';
 import { CalendarModal } from './CalendarModal';
+import { RulesConfig } from './RulesConfig';
 
 interface Facility {
   id: number;
@@ -12,6 +13,7 @@ interface Facility {
   total_rooms: number;
   max_sell_rooms: number;
   plan: string;
+  custom_event_multiplier: number;
 }
 
 interface PriceRecommendation {
@@ -62,6 +64,14 @@ function App() {
   const [suggestion, setSuggestion] = useState<SuggestionData | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+
+  const refreshAll = () => {
+    fetchFacilities();
+    if (selectedFacility && selectedDate) {
+      fetchDashboardData(selectedFacility, selectedDate);
+      fetchRules(selectedFacility);
+    }
+  }
 
   useEffect(() => {
     fetchFacilities();
@@ -131,18 +141,6 @@ function App() {
     }
   };
 
-  const toggleRule = async (ruleId: number) => {
-    try {
-      await axios.put(`http://localhost:8000/rules/${ruleId}/toggle`);
-      if (selectedFacility && selectedDate) {
-        fetchRules(selectedFacility);
-        fetchDashboardData(selectedFacility, selectedDate);
-      }
-    } catch (error) {
-       console.error("ルールの変更に失敗しました:", error);
-    }
-  }
-
   const selectedFacilityData = facilities.find(f => f.id === selectedFacility);
 
   return (
@@ -188,7 +186,7 @@ function App() {
         </header>
 
         {showSettings && selectedFacilityData && (
-           <SettingsPanel facilityId={selectedFacility!} facilityData={selectedFacilityData} onUpdate={fetchFacilities} />
+           <SettingsPanel facilityId={selectedFacility!} facilityData={selectedFacilityData} onUpdate={refreshAll} />
         )}
 
         {/* Top KPIs */}
@@ -201,7 +199,7 @@ function App() {
                   <p className="text-4xl font-extrabold text-gray-800 mt-2">
                     {Math.round((occupancy.booked_rooms / selectedFacilityData.max_sell_rooms) * 100)}<span className="text-xl font-normal text-gray-500">%</span>
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">{occupancy.booked_rooms} / {selectedFacilityData.max_sell_rooms} 室 (販売上限)</p>
+                  <p className="text-xs text-gray-400 mt-1">{occupancy.booked_rooms} / {selectedFacilityData.max_sell_rooms} 室 (販売上限ブロック)</p>
                 </div>
               ) : (
                 <p className="text-lg text-gray-400 mt-2">データなし</p>
@@ -238,7 +236,7 @@ function App() {
                       <span className="font-semibold text-gray-800">¥{selectedFacilityData.base_price.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm border-b pb-1">
-                      <span className="text-gray-500">イベント加算 (Pro機能)</span>
+                      <span className="text-gray-500">週末・イベント手動加算 (Pro機能)</span>
                       <span className="font-semibold text-green-600">{recommendation.event_multiplier > 1.0 ? `x${recommendation.event_multiplier}` : '-'}</span>
                     </div>
                     {selectedFacilityData.plan === "Enterprise" ? (
@@ -264,41 +262,18 @@ function App() {
           </div>
         )}
 
-        {!showSettings && (
+        {!showSettings && selectedFacilityData && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Rules Section */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-              <div className="bg-gray-50 p-4 border-b">
-                <h2 className="text-lg font-bold text-gray-800">自動価格設定ルール</h2>
-                <p className="text-xs text-gray-500 mt-1">※Proプラン以上は外部イベント等により更に自動加算されます</p>
-              </div>
-              <div className="p-4 space-y-3 flex-grow overflow-y-auto max-h-[300px]">
-                {rules.length > 0 ? rules.map(rule => (
-                    <div key={rule.id} className={`flex items-center justify-between p-3 rounded-lg border ${rule.active ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100 opacity-75'}`}>
-                        <div>
-                          <p className={`text-sm font-medium ${rule.active ? 'text-gray-800' : 'text-gray-400'}`}>
-                            稼働率が <span className="font-bold">{rule.occupancy_threshold_percent * 100}%</span> 以上の場合
-                          </p>
-                          <p className={`text-xs mt-1 ${rule.active ? 'text-blue-600' : 'text-gray-400'}`}>
-                            基本価格を {rule.price_multiplier} 倍にする
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => toggleRule(rule.id)}
-                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
-                            rule.active
-                              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                              : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                          }`}
-                        >
-                          {rule.active ? 'ON' : 'OFF'}
-                        </button>
-                    </div>
-                )) : (
-                  <p className="text-sm text-gray-500 text-center py-4">ルールが設定されていません</p>
-                )}
-              </div>
-            </div>
+
+            {/* Custom Rules Section */}
+            <RulesConfig
+              rules={rules}
+              facilityId={selectedFacilityData.id}
+              onRuleChanged={() => {
+                fetchRules(selectedFacilityData.id);
+                fetchDashboardData(selectedFacilityData.id, selectedDate);
+              }}
+            />
 
             {/* Performance & PDCA Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">

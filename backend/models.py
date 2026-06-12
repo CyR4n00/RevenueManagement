@@ -8,24 +8,28 @@ class Facility(BaseModel):
     min_price: int
     max_price: int
     total_rooms: int
-    max_sell_rooms: int # オーバーブッキング防止用（実際に販売する最大室数）
+    max_sell_rooms: int
     plan: str # "Standard", "Pro", "Enterprise"
+    custom_event_multiplier: float = 1.2 # 週末・イベント時の加算倍率（オーナーが設定可能）
 
 class IntegrationSettings(BaseModel):
     facility_id: int
-    # サイトコントローラー連携
-    site_controller_type: Optional[str] # "neppan", "beds24", "temairazu", None
+    site_controller_type: Optional[str]
     site_controller_api_key: Optional[str]
-    # 個別OTA連携（サイトコントローラーを使わない場合や併用）
     rakuten_enabled: bool = False
     bookingcom_enabled: bool = False
     airbnb_enabled: bool = False
-    # 同期設定（プランに応じた課金要素）
-    sync_mode: str # "daily" (Standard), "realtime" (Pro), "auto_optimize" (Enterprise)
+    sync_mode: str
 
 class SyncStatus(BaseModel):
     facility_id: int
     last_sync_time: str
-    status: str # "success", "error", "pending"
+    status: str
     synced_ota_list: List[str]
     message: str
+
+class RuleCreate(BaseModel):
+    facility_id: int
+    occupancy_threshold_percent: float
+    price_multiplier: float
+    active: bool = True
