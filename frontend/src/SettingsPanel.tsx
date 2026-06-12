@@ -148,16 +148,19 @@ export function SettingsPanel({ facilityId, facilityData, onUpdate }: SettingsPa
                  <option value="tl_lincoln">TL-リンカーン (TL-Lincoln)</option>
                  <option value="temairazu">手間いらず (TEMAIRAZU)</option>
                  <option value="beds24">Beds24</option>
-                 <option value="tactex">タクトピクセル (TACTEX)</option>
+                 <option value="airhost">AirHost (エアホスト)</option>
                  <option value="minpaku_in">民泊IN</option>
+                 <option value="rakujan">らくじゃん</option>
                  <option value="other">その他 (Webhook連携等)</option>
                </select>
                <label className="block text-sm text-gray-600 mb-1">API Key / Token</label>
                <input type="password" placeholder="****************" className="w-full p-2 border rounded" defaultValue={integrations.site_controller_api_key || ''} />
+               <p className="text-[10px] text-gray-500 mt-1">※APIキーを登録するだけで、システムが自動で価格を同期します。</p>
              </div>
 
              <div className="border p-4 rounded bg-gray-50">
                <h4 className="font-semibold text-gray-700 mb-2">ダイレクトOTA連携</h4>
+               <p className="text-xs text-gray-500 mb-2">※サイトコントローラーを使用しない場合でも、各予約サイトへ直接同期が可能です。</p>
                <label className="flex items-center space-x-2 mb-2">
                  <input type="checkbox" defaultChecked={integrations.rakuten_enabled} /> <span>楽天トラベル</span>
                </label>
@@ -199,6 +202,10 @@ export function SettingsPanel({ facilityId, facilityData, onUpdate }: SettingsPa
           <span className="text-3xl mb-2 block">📁</span>
           <p className="text-gray-600 font-bold mb-1">CSVファイルをここにドロップ</p>
           <p className="text-xs text-gray-400">または クリックしてファイルを選択</p>
+        </div>
+        <div className="mt-4 p-3 bg-white rounded border text-sm text-gray-600">
+          <p className="font-bold mb-1">💡 独自のフォーマットでも安心の「自動マッピング機能」</p>
+          <p>アップロードされたCSVの列名（列の順番）が異なっていても、システムがAIを用いて自動的に「日付」「価格」「稼働率」の列を判別・紐付け（マッピング）するため、面倒な型合わせのエラーを大幅に軽減します。</p>
         </div>
       </div>
     </div>

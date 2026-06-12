@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { SettingsPanel } from './SettingsPanel';
-import { CalendarModal } from './CalendarModal';
 import { RulesConfig } from './RulesConfig';
 
 interface Facility {
@@ -40,19 +39,6 @@ interface Rule {
   active: boolean;
 }
 
-interface PerformanceData {
-  facility_id: number;
-  month: string;
-  target_revenue: number;
-  actual_revenue: number;
-}
-
-interface SuggestionData {
-  facility_id: number;
-  date_generated: string;
-  suggestion_text: string;
-}
-
 function App() {
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [selectedFacility, setSelectedFacility] = useState<number | null>(null);
@@ -60,10 +46,7 @@ function App() {
   const [recommendation, setRecommendation] = useState<PriceRecommendation | null>(null);
   const [occupancy, setOccupancy] = useState<OccupancyData | null>(null);
   const [rules, setRules] = useState<Rule[]>([]);
-  const [performance, setPerformance] = useState<PerformanceData[]>([]);
-  const [suggestion, setSuggestion] = useState<SuggestionData | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
 
   const refreshAll = () => {
     fetchFacilities();
@@ -81,8 +64,6 @@ function App() {
     if (selectedFacility && selectedDate) {
       fetchDashboardData(selectedFacility, selectedDate);
       fetchRules(selectedFacility);
-      fetchPerformance(selectedFacility);
-      fetchSuggestion(selectedFacility);
     }
   }, [selectedFacility, selectedDate]);
 
@@ -106,24 +87,6 @@ function App() {
       console.error("ルールの取得に失敗しました:", error);
     }
   };
-
-  const fetchPerformance = async (facilityId: number) => {
-    try {
-      const response = await axios.get(`http://localhost:8000/performance/${facilityId}`);
-      setPerformance(response.data);
-    } catch (error) {
-      console.error("パフォーマンスデータの取得に失敗しました:", error);
-    }
-  }
-
-  const fetchSuggestion = async (facilityId: number) => {
-    try {
-      const response = await axios.get(`http://localhost:8000/suggestions/${facilityId}`);
-      setSuggestion(response.data);
-    } catch (error) {
-      console.error("サジェストデータの取得に失敗しました:", error);
-    }
-  }
 
   const fetchDashboardData = async (facilityId: number, date: string) => {
     try {
@@ -264,8 +227,6 @@ function App() {
 
         {!showSettings && selectedFacilityData && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            {/* Custom Rules Section */}
             <RulesConfig
               rules={rules}
               facilityId={selectedFacilityData.id}
@@ -274,87 +235,9 @@ function App() {
                 fetchDashboardData(selectedFacilityData.id, selectedDate);
               }}
             />
-
-            {/* Performance & PDCA Section */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-              <div className="bg-gray-50 p-4 border-b">
-                <h2 className="text-lg font-bold text-gray-800">効果検証ダッシュボード (PDCA)</h2>
-                <p className="text-xs text-gray-500 mt-1">需要予測 ▷ 販売 ▷ 検証 のサイクル可視化</p>
-              </div>
-
-              {suggestion && (
-                <div className="bg-yellow-50 p-3 border-b border-yellow-100 flex items-start">
-                  <span className="text-xl mr-2">💡</span>
-                  <p className="text-xs text-yellow-800 font-bold leading-tight">{suggestion.suggestion_text}</p>
-                </div>
-              )}
-
-              <div className="p-4 space-y-4">
-                <h3 className="text-sm font-bold text-gray-600 border-b pb-1">直近の収益比較</h3>
-                 {performance.map((p, index) => {
-                   const diff = p.actual_revenue - p.target_revenue;
-                   const isPositive = diff >= 0;
-                   return (
-                   <div key={index} className="border rounded-lg p-3">
-                     <div className="flex justify-between items-center mb-2">
-                       <span className="font-bold text-gray-700">{p.month}</span>
-                       <span className={`text-xs font-bold px-2 py-1 rounded ${isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                         {isPositive ? '+' : ''}{Math.round((diff / p.target_revenue)*100)}%
-                       </span>
-                     </div>
-                     <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1 dark:bg-gray-700 relative">
-                        <div className="bg-blue-200 h-2.5 rounded-full absolute top-0 left-0" style={{ width: '100%' }}></div>
-                        <div className="bg-blue-600 h-2.5 rounded-full absolute top-0 left-0" style={{ width: `${Math.min(100, (p.actual_revenue/p.target_revenue)*100)}%` }}></div>
-                     </div>
-                     <div className="flex justify-between text-[10px] text-gray-500">
-                       <span>目標: ¥{(p.target_revenue/10000).toLocaleString()}万</span>
-                       <span>実績: ¥{(p.actual_revenue/10000).toLocaleString()}万</span>
-                     </div>
-                   </div>
-                 )})}
-                 <button
-                   onClick={() => setShowCalendar(true)}
-                   className="w-full mt-2 text-xs font-bold text-blue-600 border border-blue-200 bg-blue-50 py-2 rounded hover:bg-blue-100 transition-colors"
-                 >
-                   📅 カレンダーで過去の費用詳細を確認する
-                 </button>
-              </div>
-            </div>
           </div>
         )}
-
-        {/* Guest UI Mock */}
-        {!showSettings && (
-          <div className="mt-8 border-t pt-8">
-             <h2 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-wider">ゲスト向けUIウィジェット（デモ）</h2>
-             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 max-w-sm">
-                <p className="text-xs text-gray-600 mb-3 text-center font-bold">当施設の料金は空室状況により3段階で変動します</p>
-                <div className="flex justify-between text-center text-xs font-medium">
-                  <div className="flex-1 flex flex-col items-center">
-                    <div className="w-4 h-4 rounded-full bg-green-400 mb-1"></div>
-                    <span className="text-green-700">おトク</span>
-                  </div>
-                  <div className="flex-1 flex flex-col items-center">
-                    <div className="w-4 h-4 rounded-full bg-yellow-400 mb-1"></div>
-                    <span className="text-yellow-700">通常</span>
-                  </div>
-                  <div className="flex-1 flex flex-col items-center">
-                    <div className="w-4 h-4 rounded-full bg-red-400 mb-1"></div>
-                    <span className="text-red-700">混雑</span>
-                  </div>
-                </div>
-             </div>
-          </div>
-        )}
-
       </div>
-
-      {showCalendar && selectedFacilityData && (
-        <CalendarModal
-          onClose={() => setShowCalendar(false)}
-          basePrice={selectedFacilityData.base_price}
-        />
-      )}
     </div>
   );
 }
