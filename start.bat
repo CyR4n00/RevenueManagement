@@ -7,16 +7,17 @@ echo ======================================
 echo [1/2] Starting Backend (API Server)...
 cd backend
 
-if not exist venv\ goto no_venv
+if not exist venv\ goto create_venv
 call venv\Scripts\activate.bat
 goto start_backend
 
-:no_venv
+:create_venv
 echo   Virtual environment not found.
-echo   Please run "python -m venv venv", "venv\Scripts\activate", and "pip install -r requirements.txt" first.
-echo   Exiting...
-pause
-goto :eof
+echo   Creating virtual environment and installing dependencies...
+echo   (This may take a few minutes for the first time)
+python -c "import venv; venv.create('venv', with_pip=True)"
+call venv\Scripts\activate.bat
+pip install -r requirements.txt
 
 :start_backend
 start /b uvicorn main:app --reload --port 8000
