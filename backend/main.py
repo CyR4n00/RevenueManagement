@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 import datetime
 import random
 from ml_model import ml_predictor
@@ -20,7 +20,10 @@ class Facility(BaseModel):
     id: int
     name: str
     base_price: int
+    min_price: int
+    max_price: int
     total_rooms: int
+    plan: str # "Standard", "Pro", "Enterprise"
 
 class Rule(BaseModel):
     id: int
@@ -40,11 +43,19 @@ class PriceRecommendation(BaseModel):
     recommended_price_rule_based: int
     rule_applied: Optional[str]
     recommended_price_ml_based: Optional[int]
+    event_multiplier: float
+    final_price: int # Price after limits and all calculations
+
+class PerformanceData(BaseModel):
+    facility_id: int
+    month: str
+    target_revenue: int
+    actual_revenue: int
 
 # In-memory storage for demonstration
 facilities = [
-    Facility(id=1, name="サンプル ホテル", base_price=10000, total_rooms=50),
-    Facility(id=2, name="サンプル スペース", base_price=5000, total_rooms=10)
+    Facility(id=1, name="サンプル ホテル", base_price=10000, min_price=6000, max_price=20000, total_rooms=50, plan="Enterprise"),
+    Facility(id=2, name="サンプル ゲストハウス", base_price=5000, min_price=3000, max_price=10000, total_rooms=10, plan="Standard")
 ]
 
 rules = [
@@ -53,19 +64,29 @@ rules = [
     Rule(id=3, facility_id=2, occupancy_threshold_percent=0.9, price_multiplier=1.5, active=True)
 ]
 
-# dynamic generation for mock
+# Mock Events database (date string to event multiplier)
+mock_events = {
+    # Let's say weekends have local events
+}
+
+def get_event_multiplier(date_str: str) -> float:
+    target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+    # Mock event: 20% increase on Fridays and Saturdays due to local events
+    if target_date.weekday() in [4, 5]:
+        return 1.2
+    return 1.0
+
+# dynamic generation for mock occupancy
 def get_mock_occupancy(facility_id: int, date_str: str) -> int:
     facility = next((f for f in facilities if f.id == facility_id), None)
     if not facility:
         return 0
 
-    # Use date as a seed so it's consistent for the same date but varies across dates
     seed_str = f"{facility_id}_{date_str}"
     random.seed(seed_str)
 
     target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
 
-    # Simulate higher demand on weekends
     if target_date.weekday() >= 5:
         base_rate = random.uniform(0.7, 1.0)
     else:
@@ -107,7 +128,6 @@ def toggle_rule(rule_id: int):
 
 @app.get("/occupancy", response_model=List[OccupancyData])
 def get_occupancy(facility_id: Optional[int] = None, date: Optional[str] = None):
-    # Dynamic dummy data for demo purposes
     if not date:
         date = datetime.date.today().isoformat()
 
@@ -129,7 +149,12 @@ def get_recommendation(facility_id: int, date: str):
     booked_rooms = get_mock_occupancy(facility_id, date)
     occupancy_rate = booked_rooms / facility.total_rooms if facility.total_rooms > 0 else 0
 
-    # 1. Rule-based recommendation
+    # Event Multiplier (Pro & Enterprise feature)
+    event_mult = 1.0
+    if facility.plan in ["Pro", "Enterprise"]:
+        event_mult = get_event_multiplier(date)
+
+    # 1. Rule-based recommendation (Standard & Pro)
     facility_rules = sorted(
         [r for r in rules if r.facility_id == facility_id and r.active],
         key=lambda x: x.occupancy_threshold_percent,
@@ -145,17 +170,44 @@ def get_recommendation(facility_id: int, date: str):
             rule_applied = f"稼働率 {int(rule.occupancy_threshold_percent*100)}% 以上 (x{rule.price_multiplier})"
             break
 
-    # 2. ML-based recommendation
-    recommended_price_ml = ml_predictor.predict_optimal_price(
-        date_str=date,
-        current_occupancy_rate=occupancy_rate,
-        base_price=facility.base_price
-    )
+    # Apply event multiplier to rule-based price
+    recommended_price_rule = int(recommended_price_rule * event_mult)
+
+    # 2. ML-based recommendation (Enterprise only feature)
+    recommended_price_ml = None
+    if facility.plan == "Enterprise":
+        recommended_price_ml = ml_predictor.predict_optimal_price(
+            date_str=date,
+            current_occupancy_rate=occupancy_rate,
+            base_price=facility.base_price
+        )
+        # Assuming ML already factors in day of week/season, but we can explicitly cap it
+
+    # 3. Final Price Calculation (Choose Best depending on plan, apply Limits)
+    raw_final_price = recommended_price_ml if (recommended_price_ml is not None) else recommended_price_rule
+
+    # Apply Safety Limits (Min/Max Price constraint)
+    final_price = max(facility.min_price, min(raw_final_price, facility.max_price))
 
     return PriceRecommendation(
         facility_id=facility_id,
         date=date,
         recommended_price_rule_based=recommended_price_rule,
         rule_applied=rule_applied,
-        recommended_price_ml_based=recommended_price_ml
+        recommended_price_ml_based=recommended_price_ml,
+        event_multiplier=event_mult,
+        final_price=final_price
     )
+
+@app.get("/performance/{facility_id}", response_model=List[PerformanceData])
+def get_performance(facility_id: int):
+    # Mock performance data for PDCA cycle verification
+    months = ["2026-03", "2026-04", "2026-05"]
+    facility = next((f for f in facilities if f.id == facility_id), None)
+    base_rev = facility.base_price * facility.total_rooms * 20 if facility else 0
+
+    return [
+        PerformanceData(facility_id=facility_id, month=months[0], target_revenue=int(base_rev*1.0), actual_revenue=int(base_rev*0.95)),
+        PerformanceData(facility_id=facility_id, month=months[1], target_revenue=int(base_rev*1.05), actual_revenue=int(base_rev*1.08)),
+        PerformanceData(facility_id=facility_id, month=months[2], target_revenue=int(base_rev*1.1), actual_revenue=int(base_rev*1.15))
+    ]
