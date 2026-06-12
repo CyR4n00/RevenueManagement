@@ -10,6 +10,16 @@ export function CalendarModal({ onClose, basePrice }: CalendarModalProps) {
   const month = "2026年 5月";
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
     // Generate dummy calendar data with past costs
     const dummyDays = [];
     for (let i = 1; i <= 31; i++) {
@@ -31,7 +41,7 @@ export function CalendarModal({ onClose, basePrice }: CalendarModalProps) {
 
         <div className="flex justify-between items-center p-4 border-b bg-gray-50">
           <h2 className="text-lg font-bold text-gray-800">過去の費用（販売価格）カレンダー表示</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+          <button onClick={onClose} aria-label="閉じる" title="閉じる" className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
         </div>
 
         <div className="p-6 overflow-y-auto">
