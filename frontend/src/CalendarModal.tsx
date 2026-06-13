@@ -10,6 +10,16 @@ export function CalendarModal({ onClose, basePrice }: CalendarModalProps) {
   const month = "2026年 5月";
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
     // Generate dummy calendar data with past costs
     const dummyDays = [];
     for (let i = 1; i <= 31; i++) {
@@ -26,11 +36,20 @@ export function CalendarModal({ onClose, basePrice }: CalendarModalProps) {
   }, [basePrice]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+      >
 
         <div className="flex justify-between items-center p-4 border-b bg-gray-50">
-          <h2 className="text-lg font-bold text-gray-800">過去の費用（販売価格）カレンダー表示</h2>
+          <h2 id="modal-title" className="text-lg font-bold text-gray-800">過去の費用（販売価格）カレンダー表示</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl" aria-label="閉じる">&times;</button>
         </div>
 
