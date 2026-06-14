@@ -11,35 +11,69 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 mb-8">
       <div className="bg-gray-50 border-b p-4 flex justify-between items-center">
         <div>
-          <h2 className="font-bold text-lg text-gray-800">ベンチマーク（競合）設定</h2>
-          <p className="text-xs text-gray-500 mt-1">AIが毎日価格をチェックする対象施設を3つまで登録できます。</p>
+          <h2 className="font-bold text-lg text-gray-800">⚙️ アシスタント設定 (ベンチマーク・通知)</h2>
+          <p className="text-xs text-gray-500 mt-1">AIが毎日監視する競合施設と、アラートの通知先を設定します。</p>
         </div>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
       </div>
 
-      <div className="p-6 space-y-6">
-        {competitors.map((comp, index) => (
-          <div key={comp.id} className="border rounded-lg p-4 bg-gray-50 flex flex-col md:flex-row items-start md:items-center space-y-3 md:space-y-0 md:space-x-4">
-             <div className="bg-blue-100 text-blue-800 font-bold w-8 h-8 rounded-full flex items-center justify-center shrink-0">
-               {index + 1}
-             </div>
-             <div className="flex-1 w-full">
-               <label className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
-               <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
-             </div>
-             <div className="flex-2 w-full md:w-1/2">
-               <label className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
-               <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
-             </div>
+      <div className="p-6 space-y-8">
+        {/* Competitor Settings */}
+        <div>
+          <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">1. ベンチマーク（競合）登録</h3>
+          <div className="space-y-4">
+            {competitors.map((comp, index) => (
+              <div key={comp.id} className="border rounded-lg p-4 bg-gray-50 flex flex-col md:flex-row items-start md:items-center space-y-3 md:space-y-0 md:space-x-4">
+                 <div className="bg-blue-100 text-blue-800 font-bold w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+                   {index + 1}
+                 </div>
+                 <div className="flex-1 w-full">
+                   <label className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
+                   <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
+                 </div>
+                 <div className="flex-2 w-full md:w-1/2">
+                   <label className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
+                   <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
+                 </div>
+              </div>
+            ))}
           </div>
-        ))}
+          <div className="mt-4 text-xs text-gray-500 flex items-start bg-gray-50 p-3 rounded border">
+            <span className="mr-2">ℹ️</span>
+            <p>※現在は「対象施設のその日の最安値（Best Available Rate）」を基準に比較します。将来のアップデートにて「部屋タイプ（スイート等）」「食事有無」を指定した厳密なプラン比較が可能になる予定です。</p>
+          </div>
+        </div>
 
-        <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg flex items-start">
-           <span className="text-xl mr-3">💡</span>
-           <div className="text-sm text-blue-900 leading-relaxed">
-             <p className="font-bold mb-1">面倒な連携は不要です。</p>
-             <p>競合施設のOTA（予約サイト）のURLを貼り付けるだけで、システムが自動で毎日価格と空室状況をスクレイピング（収集）し、レベニュータワーに反映させます。</p>
-           </div>
+        {/* Notifications Settings */}
+        <div>
+          <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">2. 変動アラートの外部通知設定</h3>
+          <p className="text-sm text-gray-600 mb-4">競合施設が大きな値上げ・値下げを行った際や、満室になった際に、即座に通知を受け取ることができます。</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="border p-4 rounded-lg bg-green-50 border-green-200">
+               <h4 className="font-bold text-green-700 flex items-center mb-3">
+                 <span className="mr-2">💬</span> LINE通知連携
+               </h4>
+               <label className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
+                 <input type="checkbox" defaultChecked={true} className="rounded text-green-600 focus:ring-green-500" />
+                 <span>LINEで通知を受け取る</span>
+               </label>
+               <button className="w-full bg-[#06C755] text-white font-bold py-2 rounded shadow hover:bg-green-600 transition-colors text-sm mt-2">
+                 LINEアカウントと連携する
+               </button>
+            </div>
+
+            <div className="border p-4 rounded-lg bg-gray-50">
+               <h4 className="font-bold text-gray-700 flex items-center mb-3">
+                 <span className="mr-2">📧</span> メール通知
+               </h4>
+               <label className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
+                 <input type="checkbox" defaultChecked={false} className="rounded text-blue-600 focus:ring-blue-500" />
+                 <span>メールで通知を受け取る</span>
+               </label>
+               <input type="email" placeholder="example@hotel.com" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none mt-1" />
+            </div>
+          </div>
         </div>
 
         <div className="flex justify-end pt-4 border-t">
