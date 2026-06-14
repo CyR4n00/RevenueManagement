@@ -40,16 +40,22 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
           <div className="mt-4 text-xs text-gray-500 flex items-start bg-gray-50 p-3 rounded border">
             <span className="mr-2">ℹ️</span>
-            <p>※現在は「対象施設のその日の最安値（Best Available Rate）」を基準に比較します。将来のアップデートにて「部屋タイプ（スイート等）」「食事有無」を指定した厳密なプラン比較が可能になる予定です。</p>
+            <p>※現在は直感的な把握を優先し「対象施設のその日の最安値（Best Available Rate）」を基準に比較します。将来のアップデートにて「部屋タイプ」や「食事有無」を指定した厳密なプラン比較が可能になる予定です。</p>
           </div>
         </div>
 
         {/* Notifications Settings */}
         <div>
-          <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">2. 変動アラートの外部通知設定</h3>
-          <p className="text-sm text-gray-600 mb-4">競合施設が大きな値上げ・値下げを行った際や、満室になった際に、即座に通知を受け取ることができます。</p>
+          <div className="flex items-center justify-between border-b pb-2 mb-4">
+            <h3 className="font-bold text-gray-700">2. 変動アラートの外部通知設定</h3>
+            <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded font-bold">推奨機能</span>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            競合施設が大きな値上げ・値下げを行った際や満室になった際に、即座に通知を受け取ることができます。<br/>
+            <span className="text-red-500 font-semibold text-xs">※毎日のPC確認が不要になるため、LINE連携を強く推奨します。</span>
+          </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
             <div className="border p-4 rounded-lg bg-green-50 border-green-200">
                <h4 className="font-bold text-green-700 flex items-center mb-3">
                  <span className="mr-2">💬</span> LINE通知連携
@@ -73,6 +79,29 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                </label>
                <input type="email" placeholder="example@hotel.com" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none mt-1" />
             </div>
+          </div>
+
+          {/* Advanced Notification Filters */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+             <h4 className="text-sm font-bold text-gray-700 mb-3">通知の頻度と条件（スパム防止）</h4>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className="block text-xs font-bold text-gray-500 mb-1">通知を送る「価格変動」のしきい値</label>
+                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                   <option value="1000">1,000円以上の変動で通知</option>
+                   <option value="3000" selected>3,000円以上の変動で通知 (推奨)</option>
+                   <option value="5000">5,000円以上の変動で通知</option>
+                 </select>
+               </div>
+               <div>
+                 <label className="block text-xs font-bold text-gray-500 mb-1">通知のタイミング</label>
+                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                   <option value="immediate">変動を検知したら即時</option>
+                   <option value="morning" selected>1日1回 朝10時にまとめて通知 (推奨)</option>
+                   <option value="evening">1日1回 夕方17時にまとめて通知</option>
+                 </select>
+               </div>
+             </div>
           </div>
         </div>
 
