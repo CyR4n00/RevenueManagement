@@ -25,12 +25,26 @@ export function CalendarModal({ onClose, basePrice }: CalendarModalProps) {
     setDays(dummyDays);
   }, [basePrice]);
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+      >
 
         <div className="flex justify-between items-center p-4 border-b bg-gray-50">
-          <h2 className="text-lg font-bold text-gray-800">過去の費用（販売価格）カレンダー表示</h2>
+          <h2 id="modal-title" className="text-lg font-bold text-gray-800">過去の費用（販売価格）カレンダー表示</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl" aria-label="閉じる">&times;</button>
         </div>
 
