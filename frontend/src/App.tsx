@@ -3,11 +3,6 @@ import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
 
-interface Competitor {
-  id: number;
-  name: string;
-}
-
 interface CompetitorPrice {
   date: string;
   competitor_id: number;
@@ -74,6 +69,7 @@ function App() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, showSettings]); // Refresh when date changes or settings close
 
   // Group market data by competitor for the Tower view

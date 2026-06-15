@@ -1,0 +1,3 @@
+## 2024-06-15 - [Form Accessibility & Icon Buttons]
+**Learning:** Discovered missing ARIA labels on icon-only buttons (`&times;`) and inputs (`select`, `input`) that lack explicit `id`/`htmlFor` associations. This degrades screen reader accessibility.
+**Action:** Ensure all icon buttons have an `aria-label` and all form inputs have associated `id` and `htmlFor` attributes on their respective labels.
