@@ -14,7 +14,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <h2 className="font-bold text-lg text-gray-800">⚙️ アシスタント設定 (ベンチマーク・通知)</h2>
           <p className="text-xs text-gray-500 mt-1">AIが毎日監視する競合施設と、アラートの通知先を設定します。</p>
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 rounded px-2" aria-label="閉じる">&times;</button>
       </div>
 
       <div className="p-6 space-y-8">
