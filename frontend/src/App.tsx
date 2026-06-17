@@ -45,6 +45,7 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [isApplied, setIsApplied] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -133,8 +134,14 @@ function App() {
                      <p className="mt-4 text-blue-200">データ分析中...</p>
                    )}
                 </div>
-                <button className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm">
-                  ✓ この価格を自社システムに反映する
+                <button
+                  onClick={() => {
+                    setIsApplied(true);
+                    setTimeout(() => setIsApplied(false), 2000);
+                  }}
+                  className={`mt-6 w-full font-bold py-2 rounded shadow transition-colors text-sm ${isApplied ? 'bg-green-100 text-green-700' : 'bg-white text-blue-700 hover:bg-blue-50'}`}
+                >
+                  {isApplied ? '反映しました' : '✓ この価格を自社システムに反映する'}
                 </button>
               </div>
 
