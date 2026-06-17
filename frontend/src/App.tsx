@@ -3,6 +3,7 @@ import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface Competitor {
   id: number;
   name: string;
@@ -74,6 +75,7 @@ function App() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, showSettings]); // Refresh when date changes or settings close
 
   // Group market data by competitor for the Tower view
