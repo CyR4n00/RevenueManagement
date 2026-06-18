@@ -4,7 +4,7 @@ test('Revenue Assistant - Competitor Dashboard Verification', async ({ page }) =
   await page.goto('http://localhost:3000');
 
   // Wait for the app to load and Revenue Tower to be visible
-  await page.waitForSelector('text=レベニュータワー');
+  await page.waitForSelector('text=レベニューカレンダー');
   await page.waitForTimeout(1000); // Wait for data to render
 
   // Take a screenshot of the main dashboard

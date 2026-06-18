@@ -168,7 +168,7 @@ function App() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                <div className="bg-gray-800 p-4 flex justify-between items-center">
                  <div>
-                   <h2 className="text-lg font-bold text-white tracking-wider">レベニュータワー</h2>
+                   <h2 className="text-lg font-bold text-white tracking-wider">レベニューカレンダー</h2>
                    <p className="text-xs text-gray-300 mt-1">ベンチマーク施設の価格変動（前日比）一覧</p>
                  </div>
                  <div className="flex space-x-3 text-xs">
