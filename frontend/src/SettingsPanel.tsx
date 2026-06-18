@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const [competitors, setCompetitors] = useState([
+  const [competitors] = useState([
     { id: 101, name: 'ホテルA (近隣リゾート)', url: 'https://travel.rakuten.co.jp/HOTEL/12345/' },
     { id: 102, name: 'ゲストハウスB (駅前)', url: 'https://www.booking.com/hotel/jp/sample.html' },
     { id: 103, name: 'Cヴィラ (一棟貸し)', url: 'https://www.airbnb.jp/rooms/98765' }
@@ -14,7 +14,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <h2 className="font-bold text-lg text-gray-800">⚙️ アシスタント設定 (ベンチマーク・通知)</h2>
           <p className="text-xs text-gray-500 mt-1">AIが毎日監視する競合施設と、アラートの通知先を設定します。</p>
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+        <button aria-label="閉じる" onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded px-1">&times;</button>
       </div>
 
       <div className="p-6 space-y-8">
@@ -28,12 +28,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                    {index + 1}
                  </div>
                  <div className="flex-1 w-full">
-                   <label className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
-                   <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
+                   <label htmlFor={`comp-name-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
+                   <input id={`comp-name-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
                  </div>
                  <div className="flex-2 w-full md:w-1/2">
-                   <label className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
-                   <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
+                   <label htmlFor={`comp-url-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
+                   <input id={`comp-url-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
                  </div>
               </div>
             ))}
@@ -77,7 +77,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                  <input type="checkbox" defaultChecked={false} className="rounded text-blue-600 focus:ring-blue-500" />
                  <span>メールで通知を受け取る</span>
                </label>
-               <input type="email" placeholder="example@hotel.com" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none mt-1" />
+               <input aria-label="メールアドレス" id="email-input" type="email" placeholder="example@hotel.com" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none mt-1" />
             </div>
           </div>
 
@@ -86,16 +86,16 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
              <h4 className="text-sm font-bold text-gray-700 mb-3">通知の頻度と条件（スパム防止）</h4>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div>
-                 <label className="block text-xs font-bold text-gray-500 mb-1">通知を送る「価格変動」のしきい値</label>
-                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                 <label htmlFor="threshold-select" className="block text-xs font-bold text-gray-500 mb-1">通知を送る「価格変動」のしきい値</label>
+                 <select id="threshold-select" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
                    <option value="1000">1,000円以上の変動で通知</option>
                    <option value="3000" selected>3,000円以上の変動で通知 (推奨)</option>
                    <option value="5000">5,000円以上の変動で通知</option>
                  </select>
                </div>
                <div>
-                 <label className="block text-xs font-bold text-gray-500 mb-1">通知のタイミング</label>
-                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                 <label htmlFor="timing-select" className="block text-xs font-bold text-gray-500 mb-1">通知のタイミング</label>
+                 <select id="timing-select" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
                    <option value="immediate">変動を検知したら即時</option>
                    <option value="morning" selected>1日1回 朝10時にまとめて通知 (推奨)</option>
                    <option value="evening">1日1回 夕方17時にまとめて通知</option>
