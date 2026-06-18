@@ -1,12 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
-
-interface Competitor {
-  id: number;
-  name: string;
-}
 
 interface CompetitorPrice {
   date: string;
@@ -46,7 +41,7 @@ function App() {
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       // Calculate next 7 days starting from selected date
       const start = new Date(selectedDate);
@@ -70,11 +65,11 @@ function App() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [selectedDate]);
 
   useEffect(() => {
     fetchData();
-  }, [selectedDate, showSettings]); // Refresh when date changes or settings close
+  }, [fetchData, showSettings]); // Refresh when date changes or settings close
 
   // Group market data by competitor for the Tower view
   const comps = Array.from(new Set(marketData.map(m => m.competitor_name)));
@@ -143,7 +138,7 @@ function App() {
                  <h2 className="text-sm font-bold text-gray-800 mb-4 flex items-center">
                    <span className="mr-2">🚨</span> 競合の重要変動アラート
                  </h2>
-                 <div className="flex-1 overflow-y-auto space-y-3 max-h-64 pr-2">
+                 <div className="flex-1 overflow-y-auto space-y-3 max-h-64 pr-2 pb-2">
                    {alerts.length === 0 ? (
                      <p className="text-gray-400 text-sm mt-4 text-center">直近で大きな価格変動はありません。</p>
                    ) : (

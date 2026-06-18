@@ -145,14 +145,15 @@ def get_recommendation(date: str):
 
     if major_increases:
         suggested = int(avg_comp_price * 0.95) # Just below the increased market
+        # Round to nearest 100 before formatting reasoning text
+        suggested = round(suggested / 100) * 100
         names = "、".join([c.competitor_name for c in major_increases])
         reasoning = f"{names} が大幅に値上げしています。周辺需要が高まっているため、市場平均に近い {suggested:,}円 に引き上げることを推奨します。"
     else:
         suggested = int(my_facility.base_price)
+        # Round to nearest 100
+        suggested = round(suggested / 100) * 100
         reasoning = "競合の価格に大きな変動はありません。現在の基本価格を維持して様子を見ることを推奨します。"
-
-    # Round to nearest 100
-    suggested = round(suggested / 100) * 100
 
     return MarketRecommendation(
         date=date,
