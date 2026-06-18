@@ -28,9 +28,9 @@ echo "[2/2] フロントエンド (画面) を起動します..."
 cd frontend
 if [ ! -d "node_modules" ]; then
     echo "  依存関係をインストールしています (初回のみ時間がかかります)..."
-    npm install > /dev/null 2>&1
+    pnpm install > /dev/null 2>&1
 fi
-npm start > /dev/null 2>&1 &
+pnpm start > /dev/null 2>&1 &
 cd ..
 
 echo "======================================"

@@ -3,11 +3,6 @@ import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
 
-interface Competitor {
-  id: number;
-  name: string;
-}
-
 interface CompetitorPrice {
   date: string;
   competitor_id: number;
@@ -45,8 +40,10 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
+    setError(null);
     try {
       // Calculate next 7 days starting from selected date
       const start = new Date(selectedDate);
@@ -69,11 +66,13 @@ function App() {
       setRecommendation(recRes.data);
     } catch (e) {
       console.error(e);
+      setError('データの取得に失敗しました。サーバーが起動しているか確認してください。');
     }
   };
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, showSettings]); // Refresh when date changes or settings close
 
   // Group market data by competitor for the Tower view
@@ -104,6 +103,15 @@ function App() {
             </button>
           </div>
         </header>
+
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-500 text-red-900 p-4 rounded-lg shadow-sm" role="alert">
+            <div className="flex items-center">
+              <span className="text-xl mr-3">⚠️</span>
+              <p className="font-bold text-sm">{error}</p>
+            </div>
+          </div>
+        )}
 
         {showSettings ? (
            <SettingsPanel onClose={() => setShowSettings(false)} />
