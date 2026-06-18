@@ -4,6 +4,6 @@ import App from './App';
 
 test('renders app header', () => {
   render(<App />);
-  const headerElement = screen.getByText(/レベニューコントロール/i);
+  const headerElement = screen.getByText(/レベニューアシスタント/i);
   expect(headerElement).toBeInTheDocument();
 });
