@@ -3,11 +3,6 @@ import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
 
-interface Competitor {
-  id: number;
-  name: string;
-}
-
 interface CompetitorPrice {
   date: string;
   competitor_id: number;
@@ -46,7 +41,7 @@ function App() {
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
 
-  const fetchData = async () => {
+  const fetchData = React.useCallback(async () => {
     try {
       // Calculate next 7 days starting from selected date
       const start = new Date(selectedDate);
@@ -70,11 +65,11 @@ function App() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [selectedDate]);
 
   useEffect(() => {
     fetchData();
-  }, [selectedDate, showSettings]); // Refresh when date changes or settings close
+  }, [fetchData, showSettings]); // Refresh when date changes or settings close
 
   // Group market data by competitor for the Tower view
   const comps = Array.from(new Set(marketData.map(m => m.competitor_name)));
@@ -89,8 +84,11 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
           </div>
           <div className="flex space-x-3 items-center">
+             <label htmlFor="date-picker" className="sr-only">対象日を選択</label>
              <input
+              id="date-picker"
               type="date"
+              aria-label="対象日を選択"
               className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
