@@ -1,0 +1,3 @@
+## 2023-10-27 - React Form Accessibility and Modal Dismissal
+ **Learning:** When rendering form elements, `htmlFor` on a `<label>` must precisely match the `id` of the `<input>`/`<select>` to support screen readers and click-to-focus behavior. For inputs mapped in a list, using the mapped item's unique identifier (e.g. `comp-name-${comp.id}`) is a scalable pattern. Modal or panel overlays should always handle the 'Escape' key for dismissal, providing keyboard users an intuitive way to back out without hunting for a close button.
+ **Action:** Applied `htmlFor`/`id` linking to all inputs/selects in `SettingsPanel.tsx`, added `aria-label="閉じる"` to the generic 'x' button, and implemented a `useEffect` hook listening for `'Escape'` keydown to trigger `onClose()`.
