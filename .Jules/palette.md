@@ -1,0 +1,3 @@
+## 2024-05-17 - Improve SettingsPanel form accessibility
+**Learning:** In the SettingsPanel form, input fields and select elements lacked explicit association with their labels, making them poorly accessible for screen readers. Using `htmlFor` matching the `id` of the form element resolves this. Furthermore, React `<select>` elements should use `defaultValue` instead of `selected` on the `<option>` tags to prevent warnings and maintain standard behavior.
+**Action:** Apply `htmlFor`/`id` linking to all form elements, ensure icon-only buttons have an `aria-label`, and use `defaultValue` for `<select>` elements in React.
