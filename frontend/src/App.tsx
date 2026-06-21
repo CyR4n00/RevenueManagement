@@ -3,11 +3,6 @@ import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
 
-interface Competitor {
-  id: number;
-  name: string;
-}
-
 interface CompetitorPrice {
   date: string;
   competitor_id: number;
@@ -46,33 +41,33 @@ function App() {
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
 
-  const fetchData = async () => {
-    try {
-      // Calculate next 7 days starting from selected date
-      const start = new Date(selectedDate);
-      const d = [];
-      for (let i = 0; i < 7; i++) {
-        const nextDate = new Date(start);
-        nextDate.setDate(start.getDate() + i);
-        d.push(nextDate.toISOString().split('T')[0]);
-      }
-      setDates(d);
-
-      const [marketRes, alertsRes, recRes] = await Promise.all([
-        axios.get(`${API_BASE}/market_data?start_date=${selectedDate}&days=7`),
-        axios.get(`${API_BASE}/alerts?start_date=${selectedDate}&days=7`),
-        axios.get(`${API_BASE}/recommendation?date=${selectedDate}`)
-      ]);
-
-      setMarketData(marketRes.data);
-      setAlerts(alertsRes.data);
-      setRecommendation(recRes.data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Calculate next 7 days starting from selected date
+        const start = new Date(selectedDate);
+        const d = [];
+        for (let i = 0; i < 7; i++) {
+          const nextDate = new Date(start);
+          nextDate.setDate(start.getDate() + i);
+          d.push(nextDate.toISOString().split('T')[0]);
+        }
+        setDates(d);
+
+        const [marketRes, alertsRes, recRes] = await Promise.all([
+          axios.get(`${API_BASE}/market_data?start_date=${selectedDate}&days=7`),
+          axios.get(`${API_BASE}/alerts?start_date=${selectedDate}&days=7`),
+          axios.get(`${API_BASE}/recommendation?date=${selectedDate}`)
+        ]);
+
+        setMarketData(marketRes.data);
+        setAlerts(alertsRes.data);
+        setRecommendation(recRes.data);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
     fetchData();
   }, [selectedDate, showSettings]); // Refresh when date changes or settings close
 
@@ -89,16 +84,21 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
           </div>
           <div className="flex space-x-3 items-center">
+             <label htmlFor="date-selector" className="sr-only">基準日選択</label>
              <input
+              id="date-selector"
               type="date"
-              className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
+              className="p-2 border border-gray-300 rounded shadow-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none font-bold text-gray-700"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
+              aria-label="基準日を選択"
             />
             <div className="h-6 border-l border-gray-300"></div>
             <button
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 outline-none ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               aria-expanded={showSettings}
+               aria-controls="settings-panel"
              >
                ⚙️ ベンチマーク設定
             </button>
@@ -133,7 +133,10 @@ function App() {
                      <p className="mt-4 text-blue-200">データ分析中...</p>
                    )}
                 </div>
-                <button className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm">
+                <button
+                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none"
+                  aria-label="この価格を自社システムに反映する"
+                >
                   ✓ この価格を自社システムに反映する
                 </button>
               </div>
