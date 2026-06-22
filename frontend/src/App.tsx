@@ -3,11 +3,6 @@ import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
 
-interface Competitor {
-  id: number;
-  name: string;
-}
-
 interface CompetitorPrice {
   date: string;
   competitor_id: number;
@@ -74,6 +69,7 @@ function App() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, showSettings]); // Refresh when date changes or settings close
 
   // Group market data by competitor for the Tower view
@@ -89,7 +85,9 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
           </div>
           <div className="flex space-x-3 items-center">
-             <input
+            <label htmlFor="date-select" className="sr-only">基準日を選択</label>
+            <input
+              id="date-select"
               type="date"
               className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
               value={selectedDate}
@@ -98,7 +96,8 @@ function App() {
             <div className="h-6 border-l border-gray-300"></div>
             <button
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               aria-expanded={showSettings}
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 outline-none ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
                ⚙️ ベンチマーク設定
             </button>
