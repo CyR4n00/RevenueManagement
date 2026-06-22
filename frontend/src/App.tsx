@@ -3,11 +3,6 @@ import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
 
-interface Competitor {
-  id: number;
-  name: string;
-}
-
 interface CompetitorPrice {
   date: string;
   competitor_id: number;
@@ -46,33 +41,33 @@ function App() {
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
 
-  const fetchData = async () => {
-    try {
-      // Calculate next 7 days starting from selected date
-      const start = new Date(selectedDate);
-      const d = [];
-      for (let i = 0; i < 7; i++) {
-        const nextDate = new Date(start);
-        nextDate.setDate(start.getDate() + i);
-        d.push(nextDate.toISOString().split('T')[0]);
-      }
-      setDates(d);
-
-      const [marketRes, alertsRes, recRes] = await Promise.all([
-        axios.get(`${API_BASE}/market_data?start_date=${selectedDate}&days=7`),
-        axios.get(`${API_BASE}/alerts?start_date=${selectedDate}&days=7`),
-        axios.get(`${API_BASE}/recommendation?date=${selectedDate}`)
-      ]);
-
-      setMarketData(marketRes.data);
-      setAlerts(alertsRes.data);
-      setRecommendation(recRes.data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Calculate next 7 days starting from selected date
+        const start = new Date(selectedDate);
+        const d = [];
+        for (let i = 0; i < 7; i++) {
+          const nextDate = new Date(start);
+          nextDate.setDate(start.getDate() + i);
+          d.push(nextDate.toISOString().split('T')[0]);
+        }
+        setDates(d);
+
+        const [marketRes, alertsRes, recRes] = await Promise.all([
+          axios.get(`${API_BASE}/market_data?start_date=${selectedDate}&days=7`),
+          axios.get(`${API_BASE}/alerts?start_date=${selectedDate}&days=7`),
+          axios.get(`${API_BASE}/recommendation?date=${selectedDate}`)
+        ]);
+
+        setMarketData(marketRes.data);
+        setAlerts(alertsRes.data);
+        setRecommendation(recRes.data);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
     fetchData();
   }, [selectedDate, showSettings]); // Refresh when date changes or settings close
 
@@ -98,7 +93,8 @@ function App() {
             <div className="h-6 border-l border-gray-300"></div>
             <button
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               aria-expanded={showSettings}
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
                ⚙️ ベンチマーク設定
             </button>
