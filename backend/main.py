@@ -7,6 +7,7 @@ import random
 
 from database import engine, Base, get_db
 import models
+from scraper import scraper_service
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -21,14 +22,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Background Task Stub for Scraper ---
-def simulate_scraper_run(db: Session, date_str: str):
+def run_scraper(db: Session, date_str: str):
     """
-    Simulates what the Apify scraper will do:
-    Fetch actual prices and insert them into the DB.
+    Runs the scraper for all competitors for a given date.
+    If direct scraping fails, it uses the fallback simulation.
     """
     target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-    is_weekend = target_date.weekday() >= 4 # Fri, Sat, Sun
+    yesterday_str = (target_date - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
     competitors = db.query(models.DBCompetitor).all()
     if not competitors:
@@ -44,34 +44,18 @@ def simulate_scraper_run(db: Session, date_str: str):
         if existing:
             continue # Already scraped
 
-        base = 12000 if comp.id == 1 else (8000 if comp.id == 2 else 15000)
-        if is_weekend:
-            base = int(base * 1.3)
+        print(f"[API] Running scraper for {comp.name} on {date_str}...")
+        price_today, is_fully_booked = scraper_service.extract_price(comp.url, date_str, comp.id)
 
-        change_type = random.choice(["none", "none", "none", "up", "down", "big_up"])
-        price_yesterday = base + random.randint(-1000, 1000)
-
-        if change_type == "none":
-            price_today = price_yesterday
-        elif change_type == "up":
-            price_today = price_yesterday + random.choice([500, 1000])
-        elif change_type == "down":
-            price_today = price_yesterday - random.choice([500, 1000])
-        elif change_type == "big_up":
-            price_today = price_yesterday + random.choice([3000, 4000, 5000])
-
-        is_fully_booked = False
-        if is_weekend and random.random() > 0.8:
-            is_fully_booked = True
-
-        # We need yesterday's data too for the diff logic to work properly from DB
-        yesterday_str = (target_date - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        # Ensure yesterday's data exists for difference calculation
         existing_yesterday = db.query(models.DBCompetitorPrice).filter(
             models.DBCompetitorPrice.competitor_id == comp.id,
             models.DBCompetitorPrice.date == yesterday_str
         ).first()
 
         if not existing_yesterday:
+             # Run scraper for yesterday too to get a baseline
+             price_yesterday, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id)
              db.add(models.DBCompetitorPrice(
                 date=yesterday_str,
                 competitor_id=comp.id,
@@ -92,13 +76,13 @@ def simulate_scraper_run(db: Session, date_str: str):
 
 @app.on_event("startup")
 def startup_event():
-    # Seed initial mock data into the database if empty
     db = next(get_db())
     if not db.query(models.DBFacility).first():
         db.add(models.DBFacility(id=1, name="自社ホテル（サンプル）", base_price=10000))
-        db.add(models.DBCompetitor(id=1, name="ホテルA (近隣リゾート)", url="https://travel.rakuten.co.jp/HOTEL/12345/"))
-        db.add(models.DBCompetitor(id=2, name="ゲストハウスB (駅前)", url="https://www.booking.com/hotel/jp/sample.html"))
-        db.add(models.DBCompetitor(id=3, name="Cヴィラ (一棟貸し)", url="https://www.airbnb.jp/rooms/98765"))
+        # Add real URLs for demonstration
+        db.add(models.DBCompetitor(id=1, name="ホテルA (アパ新宿)", url="https://travel.rakuten.co.jp/HOTEL/14138/14138.html"))
+        db.add(models.DBCompetitor(id=2, name="ゲストハウスB (東京駅前)", url="https://www.booking.com/hotel/jp/tokyo-station.ja.html"))
+        db.add(models.DBCompetitor(id=3, name="Cヴィラ (京都鴨川)", url="https://travel.rakuten.co.jp/HOTEL/180290/180290.html"))
         db.commit()
 
 # --- ENDPOINTS ---
@@ -113,14 +97,13 @@ def get_competitors(db: Session = Depends(get_db)):
 
 @app.get("/market_data", response_model=List[models.CompetitorPrice])
 def get_market_data(start_date: str, days: int = 7, db: Session = Depends(get_db)):
-    """Gets competitor pricing from the database."""
     start = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
     results = []
 
-    # Run the background scraper stub to ensure we have data for the requested dates
+    # Run scraper to ensure we have data for requested dates
     for i in range(days):
         current_date = (start + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-        simulate_scraper_run(db, current_date)
+        run_scraper(db, current_date)
 
     for i in range(days):
         current_date = (start + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
@@ -155,7 +138,6 @@ def get_market_data(start_date: str, days: int = 7, db: Session = Depends(get_db
 
 @app.get("/alerts", response_model=List[models.Alert])
 def get_alerts(start_date: str, days: int = 7, db: Session = Depends(get_db)):
-    """Generates alerts if competitor prices changed by >= 3000 JPY or sold out"""
     market_data = get_market_data(start_date, days, db)
     alerts = []
     alert_id = 1
@@ -187,8 +169,6 @@ def get_alerts(start_date: str, days: int = 7, db: Session = Depends(get_db)):
 
 @app.get("/recommendation", response_model=models.MarketRecommendation)
 def get_recommendation(date: str, db: Session = Depends(get_db)):
-    """Simple AI recommendation based strictly on today's competitor prices"""
-    # Fetch just today's data using the existing function (1 day)
     comp_data = get_market_data(start_date=date, days=1, db=db)
     facility = get_facility(db)
 

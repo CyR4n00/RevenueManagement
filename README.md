@@ -1,27 +1,44 @@
-# レベニューアシスタント (Revenue Assistant)
+# Revenue Assistant MVP
 
-## 概要
-本プロジェクトは、旅館・ホテル等の宿泊施設向け「競合調査・価格提案アシスタントツール」のプロトタイプ（MVP）です。
-複雑なサイトコントローラー機能（PMS）を置き換えるのではなく、既存システムと並走して利用することを目的とし、直感的なUIで市場の動向を把握できます。
+A local B2B demo application focused on competitor price tracking and revenue recommendations.
 
-## 主な機能（MVPスコープ）
-*   **レベニューカレンダー**: 競合施設の指定日の販売価格をマトリックス状に表示。前日からの価格変動（値上げ・値下げ）を赤/青で直感的に可視化します。
-*   **重要変動アラート**: 競合施設の大幅な値上げ・値下げ、または満室を検知してアラートを出します。
-*   **AI価格提案**: 蓄積された過去データではなく、「現在の競合の価格・空室状況」をベースにして、自社の適正価格を提案します。
-*   **ベンチマーク設定**: 複雑なAPI連携を必要とせず、OTA（楽天トラベル等）のURLを登録するだけで利用開始できるシンプルな設計。
+## Overview
 
-## 起動方法
+Based on user feedback, this MVP focuses strictly on:
+1. **Competitor Data Analysis:** Simulating OTA scraping to capture competitor pricing and sellouts.
+2. **Visual Revenue Calendar:** Displaying up/down pricing trends among competitors to quickly evaluate the market.
+3. **Automated Recommendations:** Proposing price actions based on real-time changes rather than complex, opaque ML models.
+4. **Push Notifications:** Alerting low-IT-literacy operators via mock LINE/Email integrations only when specific thresholds are breached.
 
-リポジトリルートにある起動スクリプトを実行してください。バックエンド（ポート8000）とフロントエンド（ポート3000）が同時に立ち上がります。
+## Setup & Running
 
-**Mac / Linux の場合:**
+This is designed to run locally for sales pitches.
+
+### Prerequisites
+
+- Python 3.9+
+- Node.js & `pnpm` (Must use `pnpm`, not `npm`)
+
+### Starting the Application
+
+You can use the provided start scripts which boot both the backend and frontend simultaneously.
+
+**Mac / Linux:**
 ```bash
 ./start.sh
 ```
 
-**Windows の場合:**
+**Windows:**
 ```bat
 start.bat
 ```
 
-起動後、ブラウザで `http://localhost:3000` にアクセスしてください。
+The frontend will be available at `http://localhost:3000`.
+The backend API will be available at `http://localhost:8000`.
+
+## Architecture Details
+
+- **Backend:** FastAPI, SQLAlchemy, Local SQLite database (`revenue_assistant.db`)
+- **Frontend:** React, TypeScript, Tailwind CSS, Create React App
+- **Scraping:** Currently a local Python stub (`scraper.py`) that returns deterministic, simulated market data for demonstration without risking IP bans.
+- **Future Production Path:** See `DB_ARCHITECTURE.md` for Supabase migration and `API_RESEARCH.md` for Apify integration.
