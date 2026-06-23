@@ -1,7 +1,7 @@
 @echo off
 
 echo ======================================
-echo  Revenue Control System Starting...
+echo  Revenue Assistant Starting...
 echo ======================================
 
 echo [1/2] Starting Backend (API Server)...
@@ -31,10 +31,10 @@ goto start_frontend
 
 :install_npm
 echo   Installing dependencies (This may take a few minutes)...
-call npm install
+call pnpm install
 
 :start_frontend
-start /b npm start
+start /b pnpm start
 cd ..
 
 echo ======================================
