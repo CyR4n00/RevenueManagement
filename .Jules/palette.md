@@ -1,0 +1,3 @@
+## 2026-06-23 - [React Select Accessibility]
+ **Learning:** In React, standard HTML `<select>` tags emit warnings if `<option selected>` is used. To avoid this and align with best practices, use `defaultValue="..."` on the parent `<select>` element itself. Additionally, always explicitly link `<label>` and `<input>`/`<select>` using `htmlFor` and `id` for accessibility.
+ **Action:** Applied `defaultValue` to `select` tags and linked labels with inputs via `id` and `htmlFor` in `SettingsPanel.tsx`.
