@@ -90,24 +90,28 @@ function App() {
           </div>
           <div className="flex space-x-3 items-center">
              <input
+              aria-label="日付選択"
               type="date"
-              className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
+              className="p-2 border border-gray-300 rounded shadow-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none font-bold text-gray-700"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
             />
             <div className="h-6 border-l border-gray-300"></div>
             <button
+               aria-expanded={showSettings}
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 outline-none ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
                ⚙️ ベンチマーク設定
             </button>
           </div>
         </header>
 
-        {showSettings ? (
+        {showSettings && (
            <SettingsPanel onClose={() => setShowSettings(false)} />
-        ) : (
+        )}
+
+        {!showSettings && (
           <div className="space-y-6">
 
             {/* Top Row: AI Suggestion & Alerts */}
