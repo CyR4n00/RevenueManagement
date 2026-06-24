@@ -1,0 +1,3 @@
+## 2026-06-21 - Form Component Accessibility Learnings
+**Learning:** Implicit label wrapping (e.g., placing `<input>` inside `<label>`) and lack of keyboard-specific focus indicators (using `focus:` instead of `focus-visible:`) on inputs were prevalent. This degraded the experience for both screen reader users and those navigating via keyboard. Additionally, icon-only buttons like the close `&times;` symbol lacked `aria-label` descriptions.
+**Action:** Always explicitly link labels and inputs using `htmlFor` and `id` attributes. Default to `focus-visible:` for focus rings to avoid distracting visual outlines on mouse clicks, while ensuring clear indication for keyboard users. Ensure all icon-only buttons include descriptive `aria-label` attributes.
