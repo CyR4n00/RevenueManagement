@@ -36,14 +36,14 @@ class Facility(BaseModel):
     name: str
     base_price: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Competitor(BaseModel):
     id: int
     name: str
     url: Optional[str] = None
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class CompetitorPrice(BaseModel):
     date: str
