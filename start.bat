@@ -1,18 +1,30 @@
 @echo off
+chcp 65001 > nul
 
 echo ======================================
 echo  Revenue Assistant Starting...
 echo ======================================
 
+:: Check for pnpm
+where pnpm >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [ERROR] pnpm is not installed.
+    echo Please install pnpm by running the following command in your terminal:
+    echo   npm install -g pnpm
+    echo Then try running start.bat again.
+    pause
+    goto :EOF
+)
+
 echo [1/2] Starting Backend (API Server)...
 cd backend
 
-if not exist venv\ goto create_venv
+if not exist venv\Scripts\activate.bat goto create_venv
 call venv\Scripts\activate.bat
 goto start_backend
 
 :create_venv
-echo   Virtual environment not found.
+echo   Virtual environment not found or incomplete.
 echo   Creating virtual environment and installing dependencies...
 echo   (This may take a few minutes for the first time)
 python -c "import venv; venv.create('venv', with_pip=True)"
