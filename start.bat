@@ -27,7 +27,7 @@ goto start_backend
 echo   Virtual environment not found or incomplete.
 echo   Creating virtual environment and installing dependencies...
 echo   (This may take a few minutes for the first time)
-python -c "import venv; venv.create('venv', with_pip=True)"
+python -m venv venv
 call venv\Scripts\activate.bat
 pip install -r requirements.txt
 
@@ -43,7 +43,7 @@ goto start_frontend
 
 :install_npm
 echo   Installing dependencies (This may take a few minutes)...
-call pnpm install
+call pnpm install --ignore-scripts
 
 :start_frontend
 start /b pnpm start
