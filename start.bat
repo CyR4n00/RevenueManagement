@@ -43,7 +43,10 @@ goto start_frontend
 
 :install_npm
 echo   Installing dependencies (This may take a few minutes)...
+:: Workaround for pnpm built dependency warnings
+call pnpm config set ignore-scripts true
 call pnpm install
+call pnpm config set ignore-scripts false
 
 :start_frontend
 start /b pnpm start

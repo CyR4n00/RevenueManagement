@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "pnpm": {
-    "onlyBuiltDependencies": []
+    "ignoredBuiltDependencies": ["core-js", "core-js-pure"]
   },
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
