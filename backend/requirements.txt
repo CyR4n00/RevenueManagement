@@ -5,3 +5,5 @@ SQLAlchemy==2.0.15
 python-multipart==0.0.6
 requests==2.31.0
 beautifulsoup4==4.12.3
+pytest>=7.0.0
+httpx==0.23.0
