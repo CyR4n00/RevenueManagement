@@ -1,6 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+import io
+import csv
 from typing import List
 import datetime
 import random
@@ -167,6 +170,12 @@ def get_alerts(start_date: str, days: int = 7, db: Session = Depends(get_db)):
 
     return alerts
 
+def price_to_rank(price: int) -> str:
+    if price >= 20000: return "A"
+    if price >= 15000: return "B"
+    if price >= 10000: return "C"
+    return "D"
+
 @app.get("/recommendation", response_model=models.MarketRecommendation)
 def get_recommendation(date: str, db: Session = Depends(get_db)):
     comp_data = get_market_data(start_date=date, days=1, db=db)
@@ -174,10 +183,13 @@ def get_recommendation(date: str, db: Session = Depends(get_db)):
 
     available_comps = [c for c in comp_data if not c.is_fully_booked]
     if not available_comps:
+         raw_suggested = int(facility.base_price * 1.5)
+         suggested = min(max(raw_suggested, facility.min_price), facility.max_price)
          return models.MarketRecommendation(
             date=date,
-            suggested_price=int(facility.base_price * 1.5),
-            reasoning="ベンチマーク施設がすべて満室です。強気の価格設定（通常比1.5倍）を推奨します。"
+            suggested_price=suggested,
+            suggested_rank=price_to_rank(suggested),
+            reasoning="ベンチマーク施設がすべて満室です。強気の価格設定を推奨しますが、上限・下限設定（ガードレール）の範囲内に調整しました。"
         )
 
     avg_comp_price = sum(c.price_today for c in available_comps) / len(available_comps)
@@ -185,11 +197,13 @@ def get_recommendation(date: str, db: Session = Depends(get_db)):
     major_increases = [c for c in available_comps if c.difference >= 3000]
 
     if major_increases:
-        suggested = int(avg_comp_price * 0.95)
+        raw_suggested = int(avg_comp_price * 0.95)
+        suggested = min(max(raw_suggested, facility.min_price), facility.max_price)
         names = "、".join([c.competitor_name for c in major_increases])
-        reasoning = f"{names} が大幅に値上げしています。周辺需要が高まっているため、市場平均に近い {suggested:,}円 に引き上げることを推奨します。"
+        reasoning = f"{names} が大幅に値上げしています。市場平均に合わせて上限・下限の範囲内で価格を引き上げることを推奨します。"
     else:
         suggested = int(facility.base_price)
+        suggested = min(max(suggested, facility.min_price), facility.max_price)
         reasoning = "競合の価格に大きな変動はありません。現在の基本価格を維持して様子を見ることを推奨します。"
 
     suggested = round(suggested / 100) * 100
@@ -197,5 +211,27 @@ def get_recommendation(date: str, db: Session = Depends(get_db)):
     return models.MarketRecommendation(
         date=date,
         suggested_price=suggested,
+        suggested_rank=price_to_rank(suggested),
         reasoning=reasoning
+    )
+
+@app.get("/export_csv")
+def export_csv(start_date: str, days: int = 7, db: Session = Depends(get_db)):
+    start = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    # PMS/Site Controller typical CSV format (Date, Rank)
+    writer.writerow(["Date", "Recommended_Rank", "Recommended_Price"])
+
+    for i in range(days):
+        current_date_str = (start + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+        rec = get_recommendation(current_date_str, db)
+        writer.writerow([rec.date, rec.suggested_rank, rec.suggested_price])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=revenue_ranks_{start_date}.csv"}
     )

@@ -28,6 +28,7 @@ interface Alert {
 interface Recommendation {
   date: string;
   suggested_price: number;
+  suggested_rank: string;
   reasoning: string;
 }
 
@@ -45,6 +46,10 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+
+  const handleDownloadCsv = () => {
+    window.open(`${API_BASE}/export_csv?start_date=${selectedDate}&days=7`, '_blank');
+  };
 
   const fetchData = async () => {
     try {
@@ -121,10 +126,15 @@ function App() {
                    </h2>
                    {recommendation ? (
                      <div className="mt-4">
-                       <p className="text-sm text-blue-100 mb-1">今日設定すべき推奨価格</p>
-                       <p className="text-5xl font-extrabold tracking-tight">
-                         <span className="text-2xl font-normal mr-1">¥</span>{recommendation.suggested_price.toLocaleString()}
-                       </p>
+                       <p className="text-sm text-blue-100 mb-1">推奨価格・ランク</p>
+                       <div className="flex items-baseline">
+                         <p className="text-5xl font-extrabold tracking-tight">
+                           ランク {recommendation.suggested_rank}
+                         </p>
+                         <p className="ml-3 text-lg opacity-80">
+                           (¥{recommendation.suggested_price.toLocaleString()})
+                         </p>
+                       </div>
                        <div className="mt-4 bg-white bg-opacity-20 rounded p-3 text-sm leading-relaxed">
                          {recommendation.reasoning}
                        </div>
@@ -133,8 +143,11 @@ function App() {
                      <p className="mt-4 text-blue-200">データ分析中...</p>
                    )}
                 </div>
-                <button className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm">
-                  ✓ この価格を自社システムに反映する
+                <button
+                  onClick={handleDownloadCsv}
+                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm"
+                >
+                  📥 サイトコントローラー用CSVをダウンロード
                 </button>
               </div>
 

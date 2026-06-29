@@ -44,10 +44,37 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
+        {/* Guardrails (Min/Max Price) Settings */}
+        <div>
+          <div className="flex items-center justify-between border-b pb-2 mb-4">
+            <h3 className="font-bold text-gray-700">2. 価格変動リミッター（ガードレール）</h3>
+            <span className="bg-red-100 text-red-800 text-[10px] px-2 py-1 rounded font-bold">必須設定</span>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            AIが極端な値下げや非現実的な値上げを提案しないよう、自社ホテルの価格の「下限」と「上限」を設定します。AIの提案は必ずこの範囲内に収まります。
+          </p>
+          <div className="flex space-x-4">
+            <div className="flex-1">
+              <label htmlFor="min_price" className="block text-xs font-bold text-gray-500 mb-1">最低販売価格（これ以上は下げない）</label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-gray-500">¥</span>
+                <input id="min_price" type="number" defaultValue="5000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <label htmlFor="max_price" className="block text-xs font-bold text-gray-500 mb-1">最高販売価格（これ以上は上げない）</label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-gray-500">¥</span>
+                <input id="max_price" type="number" defaultValue="30000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Notifications Settings */}
         <div>
           <div className="flex items-center justify-between border-b pb-2 mb-4">
-            <h3 className="font-bold text-gray-700">2. 変動アラートの外部通知設定</h3>
+            <h3 className="font-bold text-gray-700">3. 変動アラートの外部通知設定</h3>
             <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded font-bold">推奨機能</span>
           </div>
           <p className="text-sm text-gray-600 mb-4">
