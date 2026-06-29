@@ -14,7 +14,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <h2 className="font-bold text-lg text-gray-800">⚙️ アシスタント設定 (ベンチマーク・通知)</h2>
           <p className="text-xs text-gray-500 mt-1">AIが毎日監視する競合施設と、アラートの通知先を設定します。</p>
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+        <button onClick={onClose} aria-label="設定を閉じる" className="text-gray-500 hover:text-gray-800 font-bold text-xl focus-visible:ring-2">&times;</button>
       </div>
 
       <div className="p-6 space-y-8">
@@ -28,12 +28,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                    {index + 1}
                  </div>
                  <div className="flex-1 w-full">
-                   <label className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
-                   <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
+                   <label htmlFor={`comp_name_${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
+                   <input id={`comp_name_${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
                  </div>
                  <div className="flex-2 w-full md:w-1/2">
-                   <label className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
-                   <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
+                   <label htmlFor={`comp_url_${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
+                   <input id={`comp_url_${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
                  </div>
               </div>
             ))}
