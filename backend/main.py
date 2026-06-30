@@ -220,18 +220,25 @@ def export_csv(start_date: str, days: int = 7, db: Session = Depends(get_db)):
     start = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
 
     output = io.StringIO()
+    # 日本語のサイトコントローラー向けにBOM付きUTF-8で出力する（Excelでの文字化け防止）
+    output.write('\ufeff')
     writer = csv.writer(output)
-    # PMS/Site Controller typical CSV format (Date, Rank)
-    writer.writerow(["Date", "Recommended_Rank", "Recommended_Price"])
+
+    # 国内の代表的なサイトコントローラー（ねっぱん！等）のCSV取込フォーマットを模したヘッダー
+    writer.writerow(["対象年月日", "部屋タイプコード", "部屋タイプ名", "適用料金ランク", "設定料金(参考)"])
 
     for i in range(days):
         current_date_str = (start + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
         rec = get_recommendation(current_date_str, db)
-        writer.writerow([rec.date, rec.suggested_rank, rec.suggested_price])
+
+        # デモ用に固定の部屋タイプに対してランクを出力
+        # 日付は YYYY/MM/DD 形式に変換
+        formatted_date = current_date_str.replace("-", "/")
+        writer.writerow([formatted_date, "RM01", "スタンダードツイン", rec.suggested_rank, rec.suggested_price])
 
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=revenue_ranks_{start_date}.csv"}
+        headers={"Content-Disposition": f"attachment; filename=pms_upload_{start_date}.csv"}
     )
