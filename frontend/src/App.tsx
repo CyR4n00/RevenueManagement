@@ -64,14 +64,14 @@ function App() {
       setDates(d);
 
       const [marketRes, alertsRes, recRes] = await Promise.all([
-        axios.get(`${API_BASE}/market_data?start_date=${selectedDate}&days=7`),
-        axios.get(`${API_BASE}/alerts?start_date=${selectedDate}&days=7`),
-        axios.get(`${API_BASE}/recommendation?date=${selectedDate}`)
+        axios.get(`${API_BASE}/market_data?start_date=${selectedDate}&days=7`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/alerts?start_date=${selectedDate}&days=7`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/recommendation?date=${selectedDate}`).catch(() => ({ data: null }))
       ]);
 
-      setMarketData(marketRes.data);
-      setAlerts(alertsRes.data);
-      setRecommendation(recRes.data);
+      setMarketData(marketRes?.data || []);
+      setAlerts(alertsRes?.data || []);
+      setRecommendation(recRes?.data || null);
     } catch (e) {
       console.error(e);
     }
@@ -94,16 +94,20 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
           </div>
           <div className="flex space-x-3 items-center">
+             <label htmlFor="date_picker" className="sr-only">基準日</label>
              <input
+              id="date_picker"
               type="date"
-              className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
+              className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none focus-visible:ring-2 font-bold text-gray-700"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
             />
             <div className="h-6 border-l border-gray-300"></div>
             <button
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               aria-expanded={showSettings}
+               aria-label="ベンチマーク設定パネルを開く"
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
                ⚙️ ベンチマーク設定
             </button>
@@ -145,7 +149,8 @@ function App() {
                 </div>
                 <button
                   onClick={handleDownloadCsv}
-                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm"
+                  aria-label="サイトコントローラー用CSVをダウンロード"
+                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm focus-visible:ring-2"
                 >
                   📥 サイトコントローラー用CSVをダウンロード
                 </button>
