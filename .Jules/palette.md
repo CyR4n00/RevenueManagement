@@ -1,0 +1,3 @@
+## 2025-07-01 - Icon-only buttons and Toggle states
+**Learning:** Icon-only close buttons (like `&times;`) and section toggles ("ベンチマーク設定") are difficult to use for keyboard and screen reader users without proper ARIA attributes (`aria-label`, `aria-expanded`, `aria-controls`) and visible focus indicators. Tailiwnd's `focus-visible:ring-2` provides an elegant and immediate way to add a keyboard-only outline without affecting mouse users.
+**Action:** Always add `aria-expanded` + `aria-controls` to toggle buttons, `aria-label` to icon-only buttons, and `focus-visible` styling (`focus-visible:ring-2 focus-visible:outline-none`) to ensure keyboard navigability for interactive elements.
