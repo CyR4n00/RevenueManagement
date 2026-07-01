@@ -8,13 +8,20 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   ]);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 mb-8">
+    <div id="settings-panel" className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 mb-8">
       <div className="bg-gray-50 border-b p-4 flex justify-between items-center">
         <div>
           <h2 className="font-bold text-lg text-gray-800">⚙️ アシスタント設定 (ベンチマーク・通知)</h2>
           <p className="text-xs text-gray-500 mt-1">AIが毎日監視する競合施設と、アラートの通知先を設定します。</p>
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+        <button
+          onClick={onClose}
+          aria-label="設定を閉じる"
+          title="設定を閉じる"
+          className="text-gray-500 hover:text-gray-800 font-bold text-xl rounded focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:outline-none px-2"
+        >
+          &times;
+        </button>
       </div>
 
       <div className="p-6 space-y-8">
