@@ -94,7 +94,9 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
           </div>
           <div className="flex space-x-3 items-center">
+             <label htmlFor="date_picker" className="sr-only">対象日を選択</label>
              <input
+              id="date_picker"
               type="date"
               className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
               value={selectedDate}
@@ -103,6 +105,8 @@ function App() {
             <div className="h-6 border-l border-gray-300"></div>
             <button
                onClick={() => setShowSettings(!showSettings)}
+               aria-expanded={showSettings}
+               aria-controls="settings-panel"
                className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
                ⚙️ ベンチマーク設定
@@ -111,7 +115,9 @@ function App() {
         </header>
 
         {showSettings ? (
-           <SettingsPanel onClose={() => setShowSettings(false)} />
+           <div id="settings-panel">
+             <SettingsPanel onClose={() => setShowSettings(false)} />
+           </div>
         ) : (
           <div className="space-y-6">
 
