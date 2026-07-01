@@ -7,15 +7,29 @@ import csv
 from typing import List
 import datetime
 import random
+from contextlib import asynccontextmanager
 
 from database import engine, Base, get_db
 import models
 from scraper import scraper_service
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create database tables
+    Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Revenue Assistant API - Competitor Focus")
+    # Initialize mock data
+    db = next(get_db())
+    if not db.query(models.DBFacility).first():
+        db.add(models.DBFacility(id=1, name="自社ホテル（サンプル）", base_price=10000))
+        # Add real URLs for demonstration
+        db.add(models.DBCompetitor(id=1, name="ホテルA (アパ新宿)", url="https://travel.rakuten.co.jp/HOTEL/14138/14138.html"))
+        db.add(models.DBCompetitor(id=2, name="ゲストハウスB (東京駅前)", url="https://www.booking.com/hotel/jp/tokyo-station.ja.html"))
+        db.add(models.DBCompetitor(id=3, name="Cヴィラ (京都鴨川)", url="https://travel.rakuten.co.jp/HOTEL/180290/180290.html"))
+        db.commit()
+    yield
+
+app = FastAPI(title="Revenue Assistant API - Competitor Focus", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -76,17 +90,6 @@ def run_scraper(db: Session, date_str: str):
         ))
     db.commit()
 
-
-@app.on_event("startup")
-def startup_event():
-    db = next(get_db())
-    if not db.query(models.DBFacility).first():
-        db.add(models.DBFacility(id=1, name="自社ホテル（サンプル）", base_price=10000))
-        # Add real URLs for demonstration
-        db.add(models.DBCompetitor(id=1, name="ホテルA (アパ新宿)", url="https://travel.rakuten.co.jp/HOTEL/14138/14138.html"))
-        db.add(models.DBCompetitor(id=2, name="ゲストハウスB (東京駅前)", url="https://www.booking.com/hotel/jp/tokyo-station.ja.html"))
-        db.add(models.DBCompetitor(id=3, name="Cヴィラ (京都鴨川)", url="https://travel.rakuten.co.jp/HOTEL/180290/180290.html"))
-        db.commit()
 
 # --- ENDPOINTS ---
 
