@@ -3,6 +3,11 @@ from bs4 import BeautifulSoup
 import re
 import datetime
 import random
+import os
+from apify_client import ApifyClient
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class OTAScraper:
     def __init__(self):
@@ -10,35 +15,50 @@ class OTAScraper:
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"
         }
+        self.apify_token = os.getenv("APIFY_API_TOKEN")
 
     def extract_price(self, url: str, target_date: str, comp_id: int) -> tuple[int, bool]:
         """
         Attempts to scrape the price from the given OTA URL.
         Returns a tuple: (price, is_fully_booked)
         """
+        # If we have a real Apify token configured (not the placeholder), attempt to use it
+        if self.apify_token and self.apify_token != "your_apify_token_here":
+            try:
+                # Mock Apify Actor call (In production, replace with actual Actor ID for Booking/Rakuten)
+                # Example:
+                # client = ApifyClient(self.apify_token)
+                # run_input = { "startUrls": [{"url": url}], "checkIn": target_date }
+                # run = client.actor("apify/booking-scraper").call(run_input=run_input)
+                # results = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+                # ... parse results ...
+                print(f"[Scraper] Apify integration called for {url}")
+                pass
+            except Exception as e:
+                print(f"[Scraper] Apify call failed: {e}")
+
+        # Attempt naive direct scraping for Rakuten as a fallback before random simulation
         try:
-            # Note: A real implementation would append the target_date to the URL parameters
-            # e.g., url + f"?checkin={target_date}&checkout=..."
-            response = requests.get(url, headers=self.headers, timeout=5)
+            date_obj = datetime.datetime.strptime(target_date, "%Y-%m-%d").date()
+            if "rakuten.co.jp" in url:
+                # Rakuten uses query parameters like f_nen1, f_tuki1, f_hi1
+                sep = "&" if "?" in url else "?"
+                rakuten_url = f"{url}{sep}f_nen1={date_obj.year}&f_tuki1={date_obj.month}&f_hi1={date_obj.day}&f_nen2={date_obj.year}&f_tuki2={date_obj.month}&f_hi2={date_obj.day+1}&f_otona_su=2"
 
-            # If the request is successful and it's a known site, try to parse
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
+                response = requests.get(rakuten_url, headers=self.headers, timeout=5)
 
-                if "rakuten.co.jp" in url:
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    # Look for actual price elements. Sometimes they are in <span class="price">
+                    # Very naive approach, usually protected by JS/bot challenges
                     prices = soup.find_all(string=re.compile(r'[0-9,]+円'))
                     if prices:
-                        # Find the first valid price
                         for p in prices:
                             clean_price = int(re.sub(r'[^0-9]', '', p))
                             if 3000 <= clean_price <= 100000:
                                 return clean_price, False
 
-                # Add parsers for booking.com, airbnb, etc., when not blocked
-
-            # If blocked (e.g. 202, 403) or parsing failed, we fall back to a fallback simulation
-            # to keep the application demonstrably working until a commercial API like Apify is connected.
-            print(f"[Scraper] Could not reliably parse {url} (Status: {response.status_code}). Using Apify fallback logic.")
+            print(f"[Scraper] Could not reliably parse {url}. Using simulation.")
             return self._fallback_simulation(target_date, comp_id)
 
         except Exception as e:
@@ -47,7 +67,7 @@ class OTAScraper:
 
     def _fallback_simulation(self, target_date_str: str, comp_id: int) -> tuple[int, bool]:
         """
-        Deterministic fallback to simulate Apify data when direct scraping is blocked.
+        Deterministic fallback to simulate market data when direct scraping is blocked/unavailable.
         """
         seed_str = f"comp_scrape_{comp_id}_{target_date_str}"
         random.seed(seed_str)
@@ -73,7 +93,6 @@ class OTAScraper:
         if is_weekend and random.random() > 0.8:
             is_fully_booked = True
 
-        # Add some noise so today != yesterday in some cases
         return price, is_fully_booked
 
 scraper_service = OTAScraper()

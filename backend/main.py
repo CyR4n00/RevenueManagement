@@ -11,6 +11,7 @@ import random
 from database import engine, Base, get_db
 import models
 from scraper import scraper_service
+from scheduler import start_scheduler
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -87,6 +88,9 @@ def startup_event():
         db.add(models.DBCompetitor(id=2, name="ゲストハウスB (東京駅前)", url="https://www.booking.com/hotel/jp/tokyo-station.ja.html"))
         db.add(models.DBCompetitor(id=3, name="Cヴィラ (京都鴨川)", url="https://travel.rakuten.co.jp/HOTEL/180290/180290.html"))
         db.commit()
+
+    # Start the background scheduler
+    start_scheduler()
 
 # --- ENDPOINTS ---
 
