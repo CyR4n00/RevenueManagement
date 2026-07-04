@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+test.use({ video: 'on' });
+
 test('Revenue Assistant - Competitor Dashboard Verification', async ({ page }) => {
   await page.goto('http://localhost:3000');
 
