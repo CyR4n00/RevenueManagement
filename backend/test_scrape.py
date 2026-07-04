@@ -1,7 +1,26 @@
-import requests
+import pytest
+from scraper import OTAScraper
 
-def get_demo_prices():
-    # Since we are in a sandbox without an Apify API key and OTA's like booking.com
-    # actively block direct requests with 202/403s, we will implement a "Scraper Interface"
-    # that uses a fallback to simulate the extraction if the direct scrape is blocked by Bot protection.
-    pass
+def test_extract_price_fallback():
+    scraper = OTAScraper()
+    # Test the fallback simulation
+    price, is_fully_booked = scraper._fallback_simulation("2026-07-20", 1)
+
+    # Assert return types
+    assert isinstance(price, int)
+    assert isinstance(is_fully_booked, bool)
+
+    # Assert reasonable range based on the logic in scraper.py
+    # base is 12000 for comp_id 1.
+    # It adds/subtracts a few thousands.
+    assert 5000 <= price <= 25000
+
+def test_get_demo_prices_mock():
+    scraper = OTAScraper()
+    # Assuming extract_price falls back gracefully on a dummy URL
+    price, is_fully_booked = scraper.extract_price("https://dummy.url", "2026-07-20", 1)
+
+    # Assert return types
+    assert isinstance(price, int)
+    assert isinstance(is_fully_booked, bool)
+    assert 5000 <= price <= 25000

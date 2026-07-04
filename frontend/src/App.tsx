@@ -102,8 +102,9 @@ function App() {
             />
             <div className="h-6 border-l border-gray-300"></div>
             <button
+               aria-label="ベンチマーク設定"
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 outline-none ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
                ⚙️ ベンチマーク設定
             </button>
@@ -140,12 +141,15 @@ function App() {
                        </div>
                      </div>
                    ) : (
-                     <p className="mt-4 text-blue-200">データ分析中...</p>
+                     <div className="mt-4 flex items-center space-x-2 text-blue-200">
+                       <div className="w-4 h-4 border-2 border-blue-200 border-t-transparent rounded-full animate-spin"></div>
+                       <p>データ分析中...</p>
+                     </div>
                    )}
                 </div>
                 <button
                   onClick={handleDownloadCsv}
-                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm"
+                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none"
                 >
                   📥 サイトコントローラー用CSVをダウンロード
                 </button>
