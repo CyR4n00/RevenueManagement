@@ -94,8 +94,11 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
           </div>
           <div className="flex space-x-3 items-center">
+             <label htmlFor="date-picker" className="sr-only">基準日</label>
              <input
+              id="date-picker"
               type="date"
+              aria-label="基準日を選択"
               className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
@@ -103,7 +106,8 @@ function App() {
             <div className="h-6 border-l border-gray-300"></div>
             <button
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               aria-expanded={showSettings}
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
                ⚙️ ベンチマーク設定
             </button>
@@ -145,7 +149,7 @@ function App() {
                 </div>
                 <button
                   onClick={handleDownloadCsv}
-                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm"
+                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-600"
                 >
                   📥 サイトコントローラー用CSVをダウンロード
                 </button>
