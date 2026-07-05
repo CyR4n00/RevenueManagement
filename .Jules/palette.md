@@ -1,0 +1,3 @@
+## 2024-03-24 - Form Field Linkages & React defaultValue patterns
+**Learning:** In dynamically mapped forms (like competitor lists), screen readers lose context without explicit ID linkage. Additionally, using `selected` on `<option>` tags inside React creates console warnings and forces uncontrolled behaviors, disrupting accessibility trees.
+**Action:** Always generate unique IDs (e.g., `id={\`comp-name-\${comp.id}\`}`) for dynamic inputs and link them explicitly using `htmlFor`. For select menus in React, uniformly apply `defaultValue` at the `<select>` level rather than `selected` on child options.
