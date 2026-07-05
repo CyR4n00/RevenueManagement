@@ -95,6 +95,8 @@ function App() {
           </div>
           <div className="flex space-x-3 items-center">
              <input
+              id="selected-date"
+              aria-label="基準日を選択"
               type="date"
               className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
               value={selectedDate}
@@ -102,8 +104,9 @@ function App() {
             />
             <div className="h-6 border-l border-gray-300"></div>
             <button
+               aria-expanded={showSettings}
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-gray-800 ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
                ⚙️ ベンチマーク設定
             </button>
