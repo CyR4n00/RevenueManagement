@@ -31,92 +31,82 @@ class OTAScraper:
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
 
-                if "rakuten.co.jp" in url:
+                # Simple HTTP parsers (These often break if layout changes or JS is required)
+                if "rakuten.co.jp" in url or "jalan.net" in url or "ikyu.com" in url:
                     prices = soup.find_all(string=re.compile(r'[0-9,]+円'))
                     if prices:
-                        # Find the first valid price
                         for p in prices:
                             clean_price = int(re.sub(r'[^0-9]', '', p))
-                            if 3000 <= clean_price <= 100000:
+                            if 3000 <= clean_price <= 300000:
                                 return clean_price, False
 
                 # Add parsers for booking.com, airbnb, etc., when not blocked
 
-            # If standard HTTP requests fail or are blocked (403), use Apify
+            # If standard HTTP requests fail or are blocked (e.g. 403 on booking/airbnb), use Apify
             if self.apify_client:
                 print(f"[Scraper] Attempting to use Apify API for {url}")
                 try:
-                    # Run a generic Web Scraper on Apify (e.g., apify/web-scraper or similar)
-                    # For this MVP, we use the standard 'apify/web-scraper' to fetch the HTML
-                    # and parse it, bypassing IP blocks.
-                    run_input = {
-                        "runMode": "DEVELOPMENT",
-                        "startUrls": [{"url": url}],
-                        "pageFunction": """
-                        async function pageFunction(context) {
-                            const { $, request } = context;
-                            return {
-                                title: $('title').text(),
-                                html: $('body').text()
-                            };
+                    # OTA-specific Apify Actors or configuration
+                    if "booking.com" in url:
+                        # Use Apify's Booking.com Scraper (example actor: dtrungtin/booking-scraper or similar, or custom script)
+                        run_input = {
+                            "startUrls": [{"url": url}],
+                            # Simplified properties for Apify's Web Scraper as a generic example
+                            "pageFunction": """
+                            async function pageFunction(context) {
+                                const { $, request } = context;
+                                // Example selector for Booking.com price
+                                const priceText = $('.bui-price-display__value').text() || $('body').text();
+                                return { html: priceText };
+                            }
+                            """
                         }
-                        """
-                    }
-                    # We use a simple task or web scraper for demonstration, however since
-                    # some apify actors require permission approvals we will catch that and fallback
-                    # to simulation if the user hasn't approved the actor yet.
-                    run = self.apify_client.actor("apify/web-scraper").call(run_input=run_input, build="latest")
+                        actor_id = "apify/web-scraper" # Replace with specific booking actor id in prod
+                    elif "airbnb." in url:
+                        run_input = {
+                            "startUrls": [{"url": url}],
+                            "pageFunction": "async function pageFunction(context) { return { html: $('body').text() }; }"
+                        }
+                        actor_id = "apify/web-scraper"
+                    elif "agoda.com" in url:
+                        run_input = {
+                            "startUrls": [{"url": url}],
+                            "pageFunction": "async function pageFunction(context) { return { html: $('body').text() }; }"
+                        }
+                        actor_id = "apify/web-scraper"
+                    else: # Rakuten, Jalan, Ikyu fallback
+                        run_input = {
+                            "runMode": "DEVELOPMENT",
+                            "startUrls": [{"url": url}],
+                            "pageFunction": "async function pageFunction(context) { return { html: $('body').text() }; }"
+                        }
+                        actor_id = "apify/web-scraper"
+
+                    print(f"[Scraper] Launching Apify Actor '{actor_id}' for {url}...")
+                    run = self.apify_client.actor(actor_id).call(run_input=run_input, build="latest")
+
                     if run and "defaultDatasetId" in run:
                         for item in self.apify_client.dataset(run["defaultDatasetId"]).iterate_items():
+                            # We search for price patterns in the returned HTML/text
                             if "html" in item:
-                                # Very basic extraction fallback since actual OTA DOMs are complex
-                                prices = re.findall(r'([0-9,]+)円', item["html"])
+                                text_data = item["html"]
+                                # Search for generic price patterns (e.g., ¥12,000, 12,000円)
+                                prices = re.findall(r'(?:¥|￥)?([0-9,]+)(?:円)?', text_data)
                                 if prices:
                                     for p in prices:
                                         clean_price = int(re.sub(r'[^0-9]', '', p))
-                                        if 3000 <= clean_price <= 100000:
+                                        if 3000 <= clean_price <= 300000:
                                             print(f"[Scraper] Successfully extracted {clean_price} via Apify!")
                                             return clean_price, False
                 except Exception as apify_err:
-                    print(f"[Scraper Warning] Apify extraction failed (e.g. permissions not approved): {apify_err}")
+                    print(f"[Scraper Warning] Apify extraction failed: {apify_err}")
 
-            # If blocked (e.g. 202, 403) or parsing failed, we fall back to a fallback simulation
-            print(f"[Scraper] Could not reliably parse {url} (or API key restricted). Using simulation fallback logic.")
-            return self._fallback_simulation(target_date, comp_id)
+            # If all attempts fail, raise an exception instead of mocking
+            print(f"[Scraper] Could not reliably parse {url}. No mock data fallback is configured.")
+            raise Exception("Failed to extract price data from target OTA URL.")
 
         except Exception as e:
-            print(f"[Scraper Error] Failed to scrape {url}: {e}. Using simulation fallback.")
-            return self._fallback_simulation(target_date, comp_id)
-
-    def _fallback_simulation(self, target_date_str: str, comp_id: int) -> tuple[int, bool]:
-        """
-        Deterministic fallback to simulate Apify data when direct scraping is blocked.
-        """
-        seed_str = f"comp_scrape_{comp_id}_{target_date_str}"
-        random.seed(seed_str)
-
-        target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
-        is_weekend = target_date.weekday() >= 4
-
-        base = 12000 if comp_id == 1 else (8000 if comp_id == 2 else 15000)
-        if is_weekend:
-            base = int(base * 1.3)
-
-        change_type = random.choice(["none", "none", "up", "down", "big_up"])
-        price = base + random.randint(-500, 500)
-
-        if change_type == "up":
-            price += random.choice([500, 1000])
-        elif change_type == "down":
-            price -= random.choice([500, 1000])
-        elif change_type == "big_up":
-            price += random.choice([3000, 4000, 5000])
-
-        is_fully_booked = False
-        if is_weekend and random.random() > 0.8:
-            is_fully_booked = True
-
-        # Add some noise so today != yesterday in some cases
-        return price, is_fully_booked
+            print(f"[Scraper Error] Failed to scrape {url}: {e}")
+            raise e
 
 scraper_service = OTAScraper()

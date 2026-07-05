@@ -4,3 +4,6 @@
 ## 2024-05-18 - pnpm script issues
 **Learning:** Newer pnpm versions may aggressively block postinstall scripts (like `core-js`), leading to failures.
 **Action:** Use `pnpm install --ignore-scripts` in CI/start scripts to bypass this issue if the scripts are not strictly required for the build.
+## 2024-05-18 - Avoid Mock Data for Real Scrapers
+**Learning:** When users ask for a real scraper integration (like Apify), they usually want the system to fail loudly if scraping fails, rather than silently falling back to mock data.
+**Action:** Remove fallback simulation routines and raise specific exceptions instead to ensure data integrity during real-world use.

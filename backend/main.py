@@ -45,33 +45,38 @@ def run_scraper(db: Session, date_str: str):
             continue # Already scraped
 
         print(f"[API] Running scraper for {comp.name} on {date_str}...")
-        price_today, is_fully_booked = scraper_service.extract_price(comp.url, date_str, comp.id)
 
-        # Ensure yesterday's data exists for difference calculation
-        existing_yesterday = db.query(models.DBCompetitorPrice).filter(
-            models.DBCompetitorPrice.competitor_id == comp.id,
-            models.DBCompetitorPrice.date == yesterday_str
-        ).first()
+        try:
+            price_today, is_fully_booked = scraper_service.extract_price(comp.url, date_str, comp.id)
 
-        if not existing_yesterday:
-             # Run scraper for yesterday too to get a baseline
-             price_yesterday, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id)
-             db.add(models.DBCompetitorPrice(
-                date=yesterday_str,
+            # Ensure yesterday's data exists for difference calculation
+            existing_yesterday = db.query(models.DBCompetitorPrice).filter(
+                models.DBCompetitorPrice.competitor_id == comp.id,
+                models.DBCompetitorPrice.date == yesterday_str
+            ).first()
+
+            if not existing_yesterday:
+                # Run scraper for yesterday too to get a baseline
+                price_yesterday, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id)
+                db.add(models.DBCompetitorPrice(
+                    date=yesterday_str,
+                    competitor_id=comp.id,
+                    price=price_yesterday,
+                    is_fully_booked=False,
+                    scraped_at=datetime.datetime.now().isoformat()
+                ))
+
+            db.add(models.DBCompetitorPrice(
+                date=date_str,
                 competitor_id=comp.id,
-                price=price_yesterday,
-                is_fully_booked=False,
+                price=price_today,
+                is_fully_booked=is_fully_booked,
                 scraped_at=datetime.datetime.now().isoformat()
             ))
-
-        db.add(models.DBCompetitorPrice(
-            date=date_str,
-            competitor_id=comp.id,
-            price=price_today,
-            is_fully_booked=is_fully_booked,
-            scraped_at=datetime.datetime.now().isoformat()
-        ))
-    db.commit()
+            db.commit()
+        except Exception as e:
+            print(f"[API Error] Skipping {comp.name} on {date_str} due to scraping failure: {e}")
+            db.rollback()
 
 
 @app.on_event("startup")
