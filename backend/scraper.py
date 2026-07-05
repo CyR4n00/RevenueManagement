@@ -3,6 +3,9 @@ from bs4 import BeautifulSoup
 import re
 import datetime
 import random
+import os
+import json
+from apify_client import ApifyClient
 
 class OTAScraper:
     def __init__(self):
@@ -10,6 +13,9 @@ class OTAScraper:
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"
         }
+        # Use the API key provided via environment variable
+        api_token = os.environ.get("APIFY_API_KEY")
+        self.apify_client = ApifyClient(api_token) if api_token else None
 
     def extract_price(self, url: str, target_date: str, comp_id: int) -> tuple[int, bool]:
         """
@@ -36,13 +42,50 @@ class OTAScraper:
 
                 # Add parsers for booking.com, airbnb, etc., when not blocked
 
+            # If standard HTTP requests fail or are blocked (403), use Apify
+            if self.apify_client:
+                print(f"[Scraper] Attempting to use Apify API for {url}")
+                try:
+                    # Run a generic Web Scraper on Apify (e.g., apify/web-scraper or similar)
+                    # For this MVP, we use the standard 'apify/web-scraper' to fetch the HTML
+                    # and parse it, bypassing IP blocks.
+                    run_input = {
+                        "runMode": "DEVELOPMENT",
+                        "startUrls": [{"url": url}],
+                        "pageFunction": """
+                        async function pageFunction(context) {
+                            const { $, request } = context;
+                            return {
+                                title: $('title').text(),
+                                html: $('body').text()
+                            };
+                        }
+                        """
+                    }
+                    # We use a simple task or web scraper for demonstration, however since
+                    # some apify actors require permission approvals we will catch that and fallback
+                    # to simulation if the user hasn't approved the actor yet.
+                    run = self.apify_client.actor("apify/web-scraper").call(run_input=run_input, build="latest")
+                    if run and "defaultDatasetId" in run:
+                        for item in self.apify_client.dataset(run["defaultDatasetId"]).iterate_items():
+                            if "html" in item:
+                                # Very basic extraction fallback since actual OTA DOMs are complex
+                                prices = re.findall(r'([0-9,]+)円', item["html"])
+                                if prices:
+                                    for p in prices:
+                                        clean_price = int(re.sub(r'[^0-9]', '', p))
+                                        if 3000 <= clean_price <= 100000:
+                                            print(f"[Scraper] Successfully extracted {clean_price} via Apify!")
+                                            return clean_price, False
+                except Exception as apify_err:
+                    print(f"[Scraper Warning] Apify extraction failed (e.g. permissions not approved): {apify_err}")
+
             # If blocked (e.g. 202, 403) or parsing failed, we fall back to a fallback simulation
-            # to keep the application demonstrably working until a commercial API like Apify is connected.
-            print(f"[Scraper] Could not reliably parse {url} (Status: {response.status_code}). Using Apify fallback logic.")
+            print(f"[Scraper] Could not reliably parse {url} (or API key restricted). Using simulation fallback logic.")
             return self._fallback_simulation(target_date, comp_id)
 
         except Exception as e:
-            print(f"[Scraper Error] Failed to scrape {url}: {e}. Using fallback.")
+            print(f"[Scraper Error] Failed to scrape {url}: {e}. Using simulation fallback.")
             return self._fallback_simulation(target_date, comp_id)
 
     def _fallback_simulation(self, target_date_str: str, comp_id: int) -> tuple[int, bool]:

@@ -19,6 +19,13 @@ This is designed to run locally for sales pitches.
 - Python 3.9+
 - Node.js & `pnpm` (Must use `pnpm`, not `npm`)
 
+### Configuration
+
+If you want to test the Apify scraper integration, export your API key before starting the backend:
+```bash
+export APIFY_API_KEY="your_api_key_here"
+```
+
 ### Starting the Application
 
 You can use the provided start scripts which boot both the backend and frontend simultaneously.
