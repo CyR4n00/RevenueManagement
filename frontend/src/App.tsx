@@ -46,12 +46,14 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleDownloadCsv = () => {
     window.open(`${API_BASE}/export_csv?start_date=${selectedDate}&days=7`, '_blank');
   };
 
   const fetchData = async () => {
+    setIsLoading(true);
     try {
       // Calculate next 7 days starting from selected date
       const start = new Date(selectedDate);
@@ -74,6 +76,8 @@ function App() {
       setRecommendation(recRes.data);
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -94,16 +98,20 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
           </div>
           <div className="flex space-x-3 items-center">
+             <label htmlFor="date_picker" className="sr-only">基準日を選択</label>
              <input
+              id="date_picker"
               type="date"
-              className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
+              className="p-2 border border-gray-300 rounded shadow-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none font-bold text-gray-700"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
             />
             <div className="h-6 border-l border-gray-300"></div>
             <button
+               aria-expanded={showSettings}
+               aria-controls="settings-panel"
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 outline-none ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
                ⚙️ ベンチマーク設定
             </button>
@@ -124,7 +132,9 @@ function App() {
                    <h2 className="text-xs font-bold uppercase tracking-wider text-blue-100 flex items-center">
                      <span className="text-xl mr-2">🤖</span> AI 価格提案 ({selectedDate})
                    </h2>
-                   {recommendation ? (
+                   {isLoading ? (
+                     <p className="mt-4 text-blue-200">データ分析中...</p>
+                   ) : recommendation ? (
                      <div className="mt-4">
                        <p className="text-sm text-blue-100 mb-1">推奨価格・ランク</p>
                        <div className="flex items-baseline">
@@ -139,13 +149,11 @@ function App() {
                          {recommendation.reasoning}
                        </div>
                      </div>
-                   ) : (
-                     <p className="mt-4 text-blue-200">データ分析中...</p>
-                   )}
+                   ) : null}
                 </div>
                 <button
                   onClick={handleDownloadCsv}
-                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm"
+                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-white outline-none transition-colors text-sm"
                 >
                   📥 サイトコントローラー用CSVをダウンロード
                 </button>

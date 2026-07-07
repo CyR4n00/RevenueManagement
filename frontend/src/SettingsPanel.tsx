@@ -14,7 +14,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <h2 className="font-bold text-lg text-gray-800">⚙️ アシスタント設定 (ベンチマーク・通知)</h2>
           <p className="text-xs text-gray-500 mt-1">AIが毎日監視する競合施設と、アラートの通知先を設定します。</p>
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+        <button onClick={onClose} aria-label="設定を閉じる" className="text-gray-500 hover:text-gray-800 font-bold text-xl focus-visible:ring-2 focus-visible:ring-blue-400 rounded outline-none">&times;</button>
       </div>
 
       <div className="p-6 space-y-8">
@@ -28,12 +28,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                    {index + 1}
                  </div>
                  <div className="flex-1 w-full">
-                   <label className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
-                   <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
+                   <label htmlFor={`comp_name_${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
+                   <input id={`comp_name_${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none" defaultValue={comp.name} />
                  </div>
                  <div className="flex-2 w-full md:w-1/2">
-                   <label className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
-                   <input type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
+                   <label htmlFor={`comp_url_${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
+                   <input id={`comp_url_${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none" defaultValue={comp.url} />
                  </div>
               </div>
             ))}
@@ -58,14 +58,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <label htmlFor="min_price" className="block text-xs font-bold text-gray-500 mb-1">最低販売価格（これ以上は下げない）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="min_price" type="number" defaultValue="5000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="min_price" type="number" defaultValue="5000" className="w-full pl-8 p-2 border rounded text-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none" />
               </div>
             </div>
             <div className="flex-1">
               <label htmlFor="max_price" className="block text-xs font-bold text-gray-500 mb-1">最高販売価格（これ以上は上げない）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="max_price" type="number" defaultValue="30000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="max_price" type="number" defaultValue="30000" className="w-full pl-8 p-2 border rounded text-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none" />
               </div>
             </div>
           </div>
@@ -87,11 +87,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                <h4 className="font-bold text-green-700 flex items-center mb-3">
                  <span className="mr-2">💬</span> LINE通知連携
                </h4>
-               <label className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
-                 <input type="checkbox" defaultChecked={true} className="rounded text-green-600 focus:ring-green-500" />
+               <label htmlFor="notify_line" className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
+                 <input id="notify_line" type="checkbox" defaultChecked={true} className="rounded text-green-600 focus-visible:ring-2 focus-visible:ring-green-500 outline-none" />
                  <span>LINEで通知を受け取る</span>
                </label>
-               <button className="w-full bg-[#06C755] text-white font-bold py-2 rounded shadow hover:bg-green-600 transition-colors text-sm mt-2">
+               <button className="w-full bg-[#06C755] text-white font-bold py-2 rounded shadow hover:bg-green-600 focus-visible:ring-2 focus-visible:ring-green-600 outline-none transition-colors text-sm mt-2">
                  LINEアカウントと連携する
                </button>
             </div>
@@ -100,11 +100,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                <h4 className="font-bold text-gray-700 flex items-center mb-3">
                  <span className="mr-2">📧</span> メール通知
                </h4>
-               <label className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
-                 <input type="checkbox" defaultChecked={false} className="rounded text-blue-600 focus:ring-blue-500" />
+               <label htmlFor="notify_email" className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
+                 <input id="notify_email" type="checkbox" defaultChecked={false} className="rounded text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 outline-none" />
                  <span>メールで通知を受け取る</span>
                </label>
-               <input type="email" placeholder="example@hotel.com" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none mt-1" />
+               <input id="email_address" aria-label="メールアドレス" type="email" placeholder="example@hotel.com" className="w-full p-2 border rounded text-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none mt-1" />
             </div>
           </div>
 
@@ -113,18 +113,18 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
              <h4 className="text-sm font-bold text-gray-700 mb-3">通知の頻度と条件（スパム防止）</h4>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div>
-                 <label className="block text-xs font-bold text-gray-500 mb-1">通知を送る「価格変動」のしきい値</label>
-                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                 <label htmlFor="threshold_select" className="block text-xs font-bold text-gray-500 mb-1">通知を送る「価格変動」のしきい値</label>
+                 <select id="threshold_select" defaultValue="3000" className="w-full p-2 border rounded text-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none bg-white">
                    <option value="1000">1,000円以上の変動で通知</option>
-                   <option value="3000" selected>3,000円以上の変動で通知 (推奨)</option>
+                   <option value="3000">3,000円以上の変動で通知 (推奨)</option>
                    <option value="5000">5,000円以上の変動で通知</option>
                  </select>
                </div>
                <div>
-                 <label className="block text-xs font-bold text-gray-500 mb-1">通知のタイミング</label>
-                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                 <label htmlFor="timing_select" className="block text-xs font-bold text-gray-500 mb-1">通知のタイミング</label>
+                 <select id="timing_select" defaultValue="morning" className="w-full p-2 border rounded text-sm focus-visible:ring-2 focus-visible:ring-blue-400 outline-none bg-white">
                    <option value="immediate">変動を検知したら即時</option>
-                   <option value="morning" selected>1日1回 朝10時にまとめて通知 (推奨)</option>
+                   <option value="morning">1日1回 朝10時にまとめて通知 (推奨)</option>
                    <option value="evening">1日1回 夕方17時にまとめて通知</option>
                  </select>
                </div>
@@ -133,7 +133,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex justify-end pt-4 border-t">
-          <button onClick={onClose} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors">
+          <button onClick={onClose} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-700 outline-none transition-colors">
             設定を保存して戻る
           </button>
         </div>
