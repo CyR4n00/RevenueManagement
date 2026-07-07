@@ -12,7 +12,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       <div className="bg-gray-50 border-b p-4 flex justify-between items-center">
         <div>
           <h2 className="font-bold text-lg text-gray-800">⚙️ アシスタント設定 (ベンチマーク・通知)</h2>
-          <p className="text-xs text-gray-500 mt-1">AIが毎日監視する競合施設と、アラートの通知先を設定します。</p>
+          <p className="text-xs text-gray-500 mt-1">エリアのトレンドと競合価格動向を監視するための対象施設と、アラートの通知先を設定します。</p>
         </div>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
       </div>

@@ -91,7 +91,8 @@ function App() {
         {/* Header Section */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
+            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜旅行・宿泊業特化のAIマーケティングツール〜</span></h1>
+            <p className="text-xs text-gray-500 mt-1">エリアのトレンドと競合価格動向をパッと見で把握し、価格設定の意思決定をサポートします。</p>
           </div>
           <div className="flex space-x-3 items-center">
              <input
