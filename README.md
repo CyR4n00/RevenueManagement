@@ -1,14 +1,16 @@
 # Revenue Assistant MVP
 
-A local B2B demo application focused on competitor price tracking and revenue recommendations.
+A local B2B demo application functioning as an AI marketing tool specialized for the travel and accommodation industry.
 
 ## Overview
 
-Based on user feedback, this MVP focuses strictly on:
-1. **Competitor Data Analysis:** Simulating OTA scraping to capture competitor pricing and sellouts.
-2. **Visual Revenue Calendar:** Displaying up/down pricing trends among competitors to quickly evaluate the market.
-3. **Automated Recommendations:** Proposing price actions based on real-time changes rather than complex, opaque ML models.
+Based on user feedback, this MVP acts as a decision-support tool rather than just a pricing automation tool (or a site controller). It focuses on:
+1. **Trend & Competitor Visualization (Visual Revenue Calendar):** Allowing users to understand area trends and competitor pricing movements at a glance.
+2. **Decision-Making Support (Automated Recommendations):** Reducing the cognitive load of pricing decisions by proposing actions based on real-time market data.
+3. **Competitor Data Analysis:** Simulating OTA scraping to capture competitor pricing and sellouts.
 4. **Push Notifications:** Alerting low-IT-literacy operators via mock LINE/Email integrations only when specific thresholds are breached.
+
+*Note: Automatic price reflection (direct integration with site controllers) is positioned as a higher-level, future feature.*
 
 ## Setup & Running
 
