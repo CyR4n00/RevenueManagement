@@ -234,11 +234,11 @@ def get_recommendation(date: str, db: Session = Depends(get_db)):
         raw_suggested = int(avg_comp_price * 0.95)
         suggested = min(max(raw_suggested, facility.min_price), facility.max_price)
         names = "、".join([c.competitor_name for c in major_increases])
-        reasoning = f"{names} が大幅に値上げしています。市場平均に合わせて上限・下限の範囲内で価格を引き上げることを推奨します。"
+        reasoning = f"【事実】{names}が3,000円以上値上げしました。\n【対応】市場平均に合わせて価格を引き上げます。"
     else:
         suggested = int(facility.base_price)
         suggested = min(max(suggested, facility.min_price), facility.max_price)
-        reasoning = "競合の価格に大きな変動はありません。現在の基本価格を維持して様子を見ることを推奨します。"
+        reasoning = "【事実】競合の価格に大きな変動はありません。\n【対応】現在の基本価格を維持します。"
 
     suggested = round(suggested / 100) * 100
 

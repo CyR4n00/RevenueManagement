@@ -39,8 +39,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 mb-8">
       <div className="bg-gray-50 border-b p-4 flex justify-between items-center">
         <div>
-          <h2 className="font-bold text-lg text-gray-800">⚙️ アシスタント設定 (ベンチマーク・通知)</h2>
-          <p className="text-xs text-gray-500 mt-1">エリアのトレンドと競合価格動向を監視するための対象施設と、アラートの通知先を設定します。</p>
+          <h2 className="font-bold text-lg text-gray-800">⚙️ 管理者専用セットアップ</h2>
+          <p className="text-xs text-gray-500 mt-1">この画面は導入時のセットアップ用です。運用時にクライアントが触る必要はありません。</p>
         </div>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
       </div>

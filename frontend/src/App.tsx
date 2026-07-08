@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface Competitor {
   id: number;
@@ -84,6 +85,24 @@ function App() {
   // Group market data by competitor for the Tower view
   const comps = Array.from(new Set(marketData.map(m => m.competitor_name)));
 
+  // Prepare chart data (Market Average vs Own Base Price proxy)
+  const chartData = dates.map(dateStr => {
+    const dayData = marketData.filter(m => m.date === dateStr && !m.is_fully_booked);
+    const avgPrice = dayData.length > 0
+      ? Math.round(dayData.reduce((sum, m) => sum + m.price_today, 0) / dayData.length)
+      : null;
+
+    // Create a deterministic mock "Own Price" for visual comparison.
+    // In production, this comes from the DBFacility.
+    const ownPrice = avgPrice ? avgPrice - (avgPrice % 1000) - 1000 : null;
+
+    return {
+      date: dateStr.substring(5), // MM-DD
+      '市場平均価格': avgPrice,
+      '自社設定価格': ownPrice
+    };
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-800">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -106,7 +125,7 @@ function App() {
                onClick={() => setShowSettings(!showSettings)}
                className={`text-sm font-bold border px-3 py-2 rounded transition-colors ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
              >
-               ⚙️ ベンチマーク設定
+               ⚙️ 管理者設定
             </button>
           </div>
         </header>
@@ -116,48 +135,70 @@ function App() {
         ) : (
           <div className="space-y-6">
 
-            {/* Top Row: AI Suggestion & Alerts */}
+            {/* Top Row: Visual Graph & Alerts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+              {/* Chart Panel */}
+              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col">
+                 <h2 className="text-sm font-bold text-gray-800 mb-4 flex items-center">
+                   <span className="mr-2">📈</span> エリア相場トレンド (自社 vs 競合平均)
+                 </h2>
+                 <div className="flex-1 w-full h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={chartData}
+                        margin={{ top: 5, right: 20, left: -20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB"/>
+                        <XAxis dataKey="date" tick={{fontSize: 12, fill: '#6B7280'}} axisLine={false} tickLine={false} />
+                        <YAxis tick={{fontSize: 12, fill: '#6B7280'}} axisLine={false} tickLine={false} tickFormatter={(value) => `¥${value.toLocaleString()}`}/>
+                        <Tooltip
+                          formatter={(value: any) => value != null ? `¥${Number(value).toLocaleString()}` : '-'}
+                          contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}
+                        />
+                        <Legend wrapperStyle={{fontSize: '12px', paddingTop: '10px'}}/>
+                        <Line type="monotone" dataKey="市場平均価格" stroke="#9CA3AF" strokeWidth={3} dot={{r: 4, fill: '#9CA3AF'}} activeDot={{r: 6}} />
+                        <Line type="monotone" dataKey="自社設定価格" stroke="#4F46E5" strokeWidth={3} dot={{r: 4, fill: '#4F46E5'}} activeDot={{r: 6}} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                 </div>
+              </div>
 
               {/* AI Assistant Panel */}
               <div className="lg:col-span-1 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-md p-5 text-white flex flex-col justify-between">
                 <div>
                    <h2 className="text-xs font-bold uppercase tracking-wider text-blue-100 flex items-center">
-                     <span className="text-xl mr-2">🤖</span> AI 価格提案 ({selectedDate})
+                     <span className="text-xl mr-2">🤖</span> 推奨アクション ({selectedDate})
                    </h2>
                    {recommendation ? (
                      <div className="mt-4">
-                       <p className="text-sm text-blue-100 mb-1">推奨価格・ランク</p>
-                       <div className="flex items-baseline">
-                         <p className="text-5xl font-extrabold tracking-tight">
-                           ランク {recommendation.suggested_rank}
-                         </p>
-                         <p className="ml-3 text-lg opacity-80">
-                           (¥{recommendation.suggested_price.toLocaleString()})
-                         </p>
-                       </div>
-                       <div className="mt-4 bg-white bg-opacity-20 rounded p-3 text-sm leading-relaxed">
+                       <div className="mt-4 bg-white bg-opacity-20 rounded p-3 text-sm leading-relaxed whitespace-pre-wrap font-bold">
                          {recommendation.reasoning}
+                       </div>
+                       <div className="mt-6">
+                         <p className="text-xs text-blue-100 mb-1">上記適用後の自社販売価格(目安)</p>
+                         <div className="flex items-baseline">
+                           <p className="text-3xl font-extrabold tracking-tight">
+                             ¥{recommendation.suggested_price.toLocaleString()}
+                           </p>
+                         </div>
                        </div>
                      </div>
                    ) : (
-                     <p className="mt-4 text-blue-200">データ分析中...</p>
+                     <p className="mt-4 text-blue-200">データ取得中...</p>
                    )}
                 </div>
-                <button
-                  onClick={handleDownloadCsv}
-                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm"
-                >
-                  📥 サイトコントローラー用CSVをダウンロード
-                </button>
               </div>
 
-              {/* Alerts Panel */}
-              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col">
+            </div>
+
+            {/* Middle Row: Alerts & Zero Config Banner */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+               <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col">
                  <h2 className="text-sm font-bold text-gray-800 mb-4 flex items-center">
-                   <span className="mr-2">🚨</span> 競合の重要変動アラート
+                   <span className="mr-2">🚨</span> 競合動向フラッシュ (直近)
                  </h2>
-                 <div className="flex-1 overflow-y-auto space-y-3 max-h-64 pr-2">
+                 <div className="flex-1 overflow-y-auto space-y-3 max-h-[220px] pr-2">
                    {alerts.length === 0 ? (
                      <p className="text-gray-400 text-sm mt-4 text-center">直近で大きな価格変動はありません。</p>
                    ) : (
@@ -176,9 +217,17 @@ function App() {
                    )}
                  </div>
               </div>
+
+               <div className="lg:col-span-2 bg-indigo-50 rounded-xl shadow-sm border border-indigo-100 p-5 flex flex-col justify-center items-center text-center">
+                 <h2 className="text-sm font-bold text-indigo-900 mb-2">💡 簡単設定で運用を開始</h2>
+                 <p className="text-sm text-indigo-700 mb-4 max-w-md">面倒な初期設定や価格の自動変更リスクはありません。右上の「⚙️ 管理者設定」からベンチマーク対象URLを登録するだけで、翌日からAIがエリア動向を分析し、最適なアクションをこの画面に提示します。</p>
+                 <button onClick={() => setShowSettings(true)} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-full shadow hover:bg-indigo-700 transition-colors text-sm">
+                   初期設定を確認する
+                 </button>
+               </div>
             </div>
 
-            {/* Revenue Tower (Competitor Matrix) */}
+            {/* Bottom Row: Revenue Tower (Competitor Matrix) */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                <div className="bg-gray-800 p-4 flex justify-between items-center">
                  <div>
