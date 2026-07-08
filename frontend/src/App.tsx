@@ -46,12 +46,14 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleDownloadCsv = () => {
     window.open(`${API_BASE}/export_csv?start_date=${selectedDate}&days=7`, '_blank');
   };
 
   const fetchData = async () => {
+    setIsLoading(true);
     try {
       // Calculate next 7 days starting from selected date
       const start = new Date(selectedDate);
@@ -74,6 +76,8 @@ function App() {
       setRecommendation(recRes.data);
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -94,7 +98,9 @@ function App() {
             <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
           </div>
           <div className="flex space-x-3 items-center">
+             <label htmlFor="date-select" className="sr-only">対象日</label>
              <input
+              id="date-select"
               type="date"
               className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
               value={selectedDate}
@@ -115,7 +121,7 @@ function App() {
         {showSettings ? (
            <SettingsPanel onClose={() => setShowSettings(false)} />
         ) : (
-          <div className="space-y-6">
+          <div className={`space-y-6 transition-opacity duration-200 ${isLoading ? 'opacity-50 pointer-events-none' : ''}`} aria-busy={isLoading}>
 
             {/* Top Row: AI Suggestion & Alerts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
