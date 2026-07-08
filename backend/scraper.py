@@ -6,6 +6,9 @@ import random
 import os
 from apify_client import ApifyClient
 from dotenv import load_dotenv
+from database import SessionLocal
+from models import DBSystemConfig
+import sqlalchemy
 
 load_dotenv()
 
@@ -15,7 +18,19 @@ class OTAScraper:
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"
         }
-        self.apify_token = os.getenv("APIFY_API_TOKEN")
+        self.apify_token = self._get_token()
+
+    def _get_token(self):
+        # Try database first, then fallback to env
+        try:
+            with SessionLocal() as db:
+                config = db.query(DBSystemConfig).filter(DBSystemConfig.key == "APIFY_API_TOKEN").first()
+                if config and config.value:
+                    return config.value
+        except sqlalchemy.exc.OperationalError:
+            # Table might not exist yet if called during import before create_all
+            pass
+        return os.getenv("APIFY_API_TOKEN")
 
     def extract_price(self, url: str, target_date: str, comp_id: int) -> tuple[int, bool]:
         """

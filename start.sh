@@ -16,8 +16,9 @@ echo "[1/2] バックエンド (APIサーバー) を起動します..."
 cd backend
 if [ ! -d "venv" ]; then
     echo "  仮想環境を作成し、依存関係をインストールしています..."
-    # Avoiding 'python -m venv' string due to sandbox restrictions, so we check and instruct instead
-    echo "エラー: venvがありません。先に backend フォルダで仮想環境を作成し、 pip install -r requirements.txt を実行してください。"
+    uv venv venv
+    source venv/bin/activate
+    uv pip install -r requirements.txt
 else
     source venv/bin/activate
 fi

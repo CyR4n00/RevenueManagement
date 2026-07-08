@@ -12,6 +12,7 @@ from database import engine, Base, get_db
 import models
 from scraper import scraper_service
 from scheduler import start_scheduler
+import os
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -93,6 +94,35 @@ def startup_event():
     start_scheduler()
 
 # --- ENDPOINTS ---
+
+@app.get("/config/apify-key", response_model=models.SystemConfigItem)
+def get_apify_key(db: Session = Depends(get_db)):
+    config = db.query(models.DBSystemConfig).filter(models.DBSystemConfig.key == "APIFY_API_TOKEN").first()
+    if config:
+        return models.SystemConfigItem(key=config.key, value=config.value)
+
+    # Fallback to .env if not in DB
+    env_token = os.getenv("APIFY_API_TOKEN", "")
+    return models.SystemConfigItem(key="APIFY_API_TOKEN", value=env_token)
+
+@app.post("/config/apify-key", response_model=models.SystemConfigItem)
+def set_apify_key(item: models.SystemConfigItem, db: Session = Depends(get_db)):
+    if item.key != "APIFY_API_TOKEN":
+        raise HTTPException(status_code=400, detail="Invalid config key")
+
+    config = db.query(models.DBSystemConfig).filter(models.DBSystemConfig.key == "APIFY_API_TOKEN").first()
+    if config:
+        config.value = item.value
+    else:
+        config = models.DBSystemConfig(key="APIFY_API_TOKEN", value=item.value)
+        db.add(config)
+    db.commit()
+    db.refresh(config)
+
+    # Also update the running scraper instance
+    scraper_service.apify_token = item.value
+
+    return models.SystemConfigItem(key=config.key, value=config.value)
 
 @app.get("/facility", response_model=models.Facility)
 def get_facility(db: Session = Depends(get_db)):

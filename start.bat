@@ -27,9 +27,9 @@ goto start_backend
 echo   Virtual environment not found or incomplete.
 echo   Creating virtual environment and installing dependencies...
 echo   (This may take a few minutes for the first time)
-python -c "import venv; venv.create('venv', with_pip=True)"
+uv venv venv
 call venv\Scripts\activate.bat
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 :start_backend
 start /b uvicorn main:app --reload --port 8000

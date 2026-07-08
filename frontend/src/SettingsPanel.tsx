@@ -1,11 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const API_BASE = 'http://localhost:8000';
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
+  const [apifyKey, setApifyKey] = useState('');
   const [competitors, setCompetitors] = useState([
     { id: 101, name: 'ホテルA (近隣リゾート)', url: 'https://travel.rakuten.co.jp/HOTEL/12345/' },
     { id: 102, name: 'ゲストハウスB (駅前)', url: 'https://www.booking.com/hotel/jp/sample.html' },
     { id: 103, name: 'Cヴィラ (一棟貸し)', url: 'https://www.airbnb.jp/rooms/98765' }
   ]);
+
+  useEffect(() => {
+    // Fetch current API key on load
+    axios.get(`${API_BASE}/config/apify-key`)
+      .then(res => {
+        if (res.data && res.data.value) {
+          setApifyKey(res.data.value);
+        }
+      })
+      .catch(err => console.error("Failed to fetch API key:", err));
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      await axios.post(`${API_BASE}/config/apify-key`, {
+        key: 'APIFY_API_TOKEN',
+        value: apifyKey
+      });
+      onClose();
+    } catch (err) {
+      console.error("Failed to save API key:", err);
+      alert("設定の保存に失敗しました。");
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 mb-8">
@@ -114,17 +142,17 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div>
                  <label className="block text-xs font-bold text-gray-500 mb-1">通知を送る「価格変動」のしきい値</label>
-                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white" defaultValue="3000">
                    <option value="1000">1,000円以上の変動で通知</option>
-                   <option value="3000" selected>3,000円以上の変動で通知 (推奨)</option>
+                   <option value="3000">3,000円以上の変動で通知 (推奨)</option>
                    <option value="5000">5,000円以上の変動で通知</option>
                  </select>
                </div>
                <div>
                  <label className="block text-xs font-bold text-gray-500 mb-1">通知のタイミング</label>
-                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                 <select className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white" defaultValue="morning">
                    <option value="immediate">変動を検知したら即時</option>
-                   <option value="morning" selected>1日1回 朝10時にまとめて通知 (推奨)</option>
+                   <option value="morning">1日1回 朝10時にまとめて通知 (推奨)</option>
                    <option value="evening">1日1回 夕方17時にまとめて通知</option>
                  </select>
                </div>
@@ -132,8 +160,30 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
+        {/* API Key Settings */}
+        <div>
+          <div className="flex items-center justify-between border-b pb-2 mb-4">
+            <h3 className="font-bold text-gray-700">4. データ連携設定 (APIキー)</h3>
+            <span className="bg-red-100 text-red-800 text-[10px] px-2 py-1 rounded font-bold">必須設定</span>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            実際の競合価格データを取得するためには、ApifyのAPIキーが必要です。
+          </p>
+          <div className="w-full">
+            <label htmlFor="apify_key" className="block text-xs font-bold text-gray-500 mb-1">Apify API Token</label>
+            <input
+              id="apify_key"
+              type="password"
+              placeholder="apify_api_..."
+              value={apifyKey}
+              onChange={(e) => setApifyKey(e.target.value)}
+              className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+            />
+          </div>
+        </div>
+
         <div className="flex justify-end pt-4 border-t">
-          <button onClick={onClose} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors">
+          <button onClick={handleSave} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors">
             設定を保存して戻る
           </button>
         </div>

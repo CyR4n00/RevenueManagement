@@ -6,6 +6,11 @@ from typing import List, Optional
 
 # --- SQLAlchemy Models (Database) ---
 
+class DBSystemConfig(Base):
+    __tablename__ = "system_config"
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String)
+
 class DBFacility(Base):
     __tablename__ = "facilities"
     id = Column(Integer, primary_key=True, index=True)
@@ -69,3 +74,7 @@ class MarketRecommendation(BaseModel):
     suggested_price: int
     suggested_rank: str
     reasoning: str
+
+class SystemConfigItem(BaseModel):
+    key: str
+    value: str
