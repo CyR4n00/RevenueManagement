@@ -1,0 +1,3 @@
+## 2025-02-23 - Async Full-Page State Loading Pattern
+**Learning:** For single-page dashboard applications lacking complex layout skeletons, utilizing a full-content container wrapper with an opacity transition (`opacity-50 pointer-events-none`) combined with `aria-busy={isLoading}` is a highly effective, low-effort method to indicate loading state. It provides immediate visual feedback to sighted users without jarring layout shifts, while adequately informing screen readers that the section is updating.
+**Action:** When implementing basic data fetching on main dashboard views, default to using this transitional opacity wrapper alongside `aria-busy` if explicit skeleton loaders are out of scope.
