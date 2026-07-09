@@ -47,7 +47,6 @@ app.add_middleware(
 def run_scraper(db: Session, date_str: str):
     """
     Runs the scraper for all competitors for a given date.
-    If direct scraping fails, it uses the fallback simulation.
     """
     target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
     yesterday_str = (target_date - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -67,7 +66,7 @@ def run_scraper(db: Session, date_str: str):
             continue # Already scraped
 
         print(f"[API] Running scraper for {comp.name} on {date_str}...")
-        price_today, is_fully_booked = scraper_service.extract_price(comp.url, date_str, comp.id)
+        price_today, is_fully_booked = scraper_service.extract_price(comp.url, date_str, comp.id, db)
 
         # Ensure yesterday's data exists for difference calculation
         existing_yesterday = db.query(models.DBCompetitorPrice).filter(
@@ -77,7 +76,7 @@ def run_scraper(db: Session, date_str: str):
 
         if not existing_yesterday:
              # Run scraper for yesterday too to get a baseline
-             price_yesterday, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id)
+             price_yesterday, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id, db)
              db.add(models.DBCompetitorPrice(
                 date=yesterday_str,
                 competitor_id=comp.id,
@@ -100,6 +99,26 @@ def run_scraper(db: Session, date_str: str):
 
 
 # --- ENDPOINTS ---
+
+@app.get("/config/{key}", response_model=models.SystemConfig)
+def get_config(key: str, db: Session = Depends(get_db)):
+    config = db.query(models.DBSystemConfig).filter(models.DBSystemConfig.key == key).first()
+    if not config:
+        # Return empty string if not found
+        return models.SystemConfig(key=key, value="")
+    return config
+
+@app.post("/config/{key}", response_model=models.SystemConfig)
+def set_config(key: str, payload: models.SystemConfig, db: Session = Depends(get_db)):
+    config = db.query(models.DBSystemConfig).filter(models.DBSystemConfig.key == key).first()
+    if not config:
+        config = models.DBSystemConfig(key=key, value=payload.value)
+        db.add(config)
+    else:
+        config.value = payload.value
+    db.commit()
+    db.refresh(config)
+    return config
 
 @app.get("/facility", response_model=models.Facility)
 def get_facility(db: Session = Depends(get_db)):
