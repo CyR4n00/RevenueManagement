@@ -1,11 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
+  const [apifyApiKey, setApifyApiKey] = useState('');
   const [competitors, setCompetitors] = useState([
     { id: 101, name: 'ホテルA (近隣リゾート)', url: 'https://travel.rakuten.co.jp/HOTEL/12345/' },
     { id: 102, name: 'ゲストハウスB (駅前)', url: 'https://www.booking.com/hotel/jp/sample.html' },
     { id: 103, name: 'Cヴィラ (一棟貸し)', url: 'https://www.airbnb.jp/rooms/98765' }
   ]);
+
+  useEffect(() => {
+    // Load config from backend
+    axios.get(`${API_BASE}/config/APIFY_API_KEY`)
+      .then(res => {
+        if (res.data && res.data.value) {
+          setApifyApiKey(res.data.value);
+        }
+      })
+      .catch(err => console.error("Failed to load APIFY_API_KEY:", err));
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      await axios.post(`${API_BASE}/config/APIFY_API_KEY`, { key: 'APIFY_API_KEY', value: apifyApiKey });
+      onClose();
+    } catch (err) {
+      console.error("Failed to save APIFY_API_KEY:", err);
+      // Even if it fails, close the panel for now
+      onClose();
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 mb-8">
@@ -18,6 +44,28 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="p-6 space-y-8">
+        {/* API Settings */}
+        <div>
+          <div className="flex items-center justify-between border-b pb-2 mb-4">
+            <h3 className="font-bold text-gray-700">0. API連携設定</h3>
+            <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded font-bold">推奨機能</span>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            高精度な競合データ収集のために、ApifyのAPIキーを設定してください。未設定の場合は簡易的な収集が試行されます。
+          </p>
+          <div>
+            <label htmlFor="apify-api-key" className="block text-xs font-bold text-gray-500 mb-1">Apify API Key</label>
+            <input
+              id="apify-api-key"
+              type="password"
+              value={apifyApiKey}
+              onChange={(e) => setApifyApiKey(e.target.value)}
+              placeholder="apify_api_..."
+              className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+            />
+          </div>
+        </div>
+
         {/* Competitor Settings */}
         <div>
           <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">1. ベンチマーク（競合）登録</h3>
@@ -134,7 +182,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex justify-end pt-4 border-t">
-          <button onClick={onClose} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none">
+          <button onClick={handleSave} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none">
             設定を保存して戻る
           </button>
         </div>

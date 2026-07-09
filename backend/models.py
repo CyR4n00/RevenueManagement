@@ -6,6 +6,11 @@ from typing import List, Optional
 
 # --- SQLAlchemy Models (Database) ---
 
+class DBSystemConfig(Base):
+    __tablename__ = "system_config"
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String)
+
 class DBFacility(Base):
     __tablename__ = "facilities"
     id = Column(Integer, primary_key=True, index=True)
@@ -32,6 +37,11 @@ class DBCompetitorPrice(Base):
     competitor = relationship("DBCompetitor")
 
 # --- Pydantic Models (API) ---
+
+class SystemConfig(BaseModel):
+    key: str
+    value: str
+    model_config = ConfigDict(from_attributes=True)
 
 class Facility(BaseModel):
     id: int
