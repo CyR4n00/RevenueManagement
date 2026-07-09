@@ -38,21 +38,21 @@ class DBCompetitorPrice(Base):
 
 # --- Pydantic Models (API) ---
 
+from pydantic import ConfigDict
+
 class Facility(BaseModel):
     id: int
     name: str
     base_price: int
     min_price: int = 5000
     max_price: int = 30000
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Competitor(BaseModel):
     id: int
     name: str
     url: Optional[str] = None
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CompetitorPrice(BaseModel):
     date: str
