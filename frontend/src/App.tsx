@@ -46,6 +46,7 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleDownloadCsv = () => {
     window.open(`${API_BASE}/export_csv?start_date=${selectedDate}&days=7`, '_blank');
@@ -53,6 +54,7 @@ function App() {
 
   const fetchData = async () => {
     try {
+      setIsLoading(true);
       // Calculate next 7 days starting from selected date
       const start = new Date(selectedDate);
       const d = [];
@@ -74,6 +76,8 @@ function App() {
       setRecommendation(recRes.data);
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -115,7 +119,7 @@ function App() {
         {showSettings ? (
            <SettingsPanel onClose={() => setShowSettings(false)} />
         ) : (
-          <div className="space-y-6">
+          <div aria-busy={isLoading} className={`space-y-6 transition-opacity duration-200 ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
 
             {/* Top Row: AI Suggestion & Alerts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
