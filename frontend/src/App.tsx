@@ -91,7 +91,7 @@ function App() {
         {/* Header Section */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
+            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">マーケティングアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜価格意思決定支援ツール〜</span></h1>
           </div>
           <div className="flex space-x-3 items-center">
              <input
@@ -184,7 +184,7 @@ function App() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                <div className="bg-gray-800 p-4 flex justify-between items-center">
                  <div>
-                   <h2 className="text-lg font-bold text-white tracking-wider">レベニューカレンダー</h2>
+                   <h2 className="text-lg font-bold text-white tracking-wider">マーケットトレンドダッシュボード</h2>
                    <p className="text-xs text-gray-300 mt-1">ベンチマーク施設の価格変動（前日比）一覧</p>
                  </div>
                  <div className="flex space-x-3 text-xs">
@@ -211,37 +211,45 @@ function App() {
                      </tr>
                    </thead>
                    <tbody>
-                     {comps.map(compName => (
-                       <tr key={compName} className="border-b hover:bg-gray-50">
-                         <td className="p-3 border-r font-bold text-sm text-gray-800">{compName}</td>
-                         {dates.map(dateStr => {
-                           const data = marketData.find(m => m.competitor_name === compName && m.date === dateStr);
-                           if (!data) return <td key={dateStr} className="p-3 text-center text-gray-300">-</td>;
+                     {comps.length === 0 ? (
+                       <tr>
+                         <td colSpan={8} className="p-8 text-center text-gray-500 font-bold bg-white">
+                           競合施設が登録されていません。「⚙️ ベンチマーク設定」から施設を登録してください。
+                         </td>
+                       </tr>
+                     ) : (
+                       comps.map(compName => (
+                         <tr key={compName} className="border-b hover:bg-gray-50">
+                           <td className="p-3 border-r font-bold text-sm text-gray-800">{compName}</td>
+                           {dates.map(dateStr => {
+                             const data = marketData.find(m => m.competitor_name === compName && m.date === dateStr);
+                             if (!data) return <td key={dateStr} className="p-3 text-center text-gray-300">-</td>;
 
-                           if (data.is_fully_booked) {
+                             if (data.is_fully_booked) {
+                               return (
+                                 <td key={dateStr} className="p-3 text-center bg-gray-100 border-x border-gray-50">
+                                   <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-1 rounded">満室 (×)</span>
+                                 </td>
+                               );
+                             }
+
+                             const isUp = data.difference > 0;
+                             const isDown = data.difference < 0;
+                             const bgClass = isUp ? 'bg-red-50' : isDown ? 'bg-blue-50' : 'bg-white';
+                             const diffColor = isUp ? 'text-red-600' : isDown ? 'text-blue-600' : 'text-gray-400';
+
                              return (
-                               <td key={dateStr} className="p-3 text-center bg-gray-100 border-x border-gray-50">
-                                 <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-1 rounded">満室 (×)</span>
+                               <td key={dateStr} className={`p-3 text-center border-x border-gray-50 ${bgClass}`}>
+                                 <div className="font-bold text-gray-800 tracking-tight">¥{data.price_today.toLocaleString()}</div>
+                                 <div className={`text-[10px] font-bold mt-1 ${diffColor}`}>
+                                   {isUp ? '▲ +' : isDown ? '▼ ' : '▶ '}{Math.abs(data.difference).toLocaleString()}
+                                 </div>
                                </td>
                              );
-                           }
-
-                           const isUp = data.difference > 0;
-                           const isDown = data.difference < 0;
-                           const bgClass = isUp ? 'bg-red-50' : isDown ? 'bg-blue-50' : 'bg-white';
-                           const diffColor = isUp ? 'text-red-600' : isDown ? 'text-blue-600' : 'text-gray-400';
-
-                           return (
-                             <td key={dateStr} className={`p-3 text-center border-x border-gray-50 ${bgClass}`}>
-                               <div className="font-bold text-gray-800 tracking-tight">¥{data.price_today.toLocaleString()}</div>
-                               <div className={`text-[10px] font-bold mt-1 ${diffColor}`}>
-                                 {isUp ? '▲ +' : isDown ? '▼ ' : '▶ '}{Math.abs(data.difference).toLocaleString()}
-                               </div>
-                             </td>
-                           );
-                         })}
-                       </tr>
-                     ))}
+                           })}
+                         </tr>
+                       ))
+                     )}
                    </tbody>
                  </table>
                </div>

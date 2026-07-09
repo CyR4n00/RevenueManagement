@@ -30,7 +30,12 @@ def scheduled_scraping_job():
                 ).first()
 
                 if not existing:
-                    price, is_booked = scraper_service.extract_price(comp.url, date_str, comp.id)
+                    try:
+                        price, is_booked = scraper_service.extract_price(comp.url, date_str, comp.id)
+                    except Exception as e:
+                        print(f"[Scheduler Error] Failed to extract price for {comp.name} on {date_str}: {e}")
+                        continue
+
                     db.add(models.DBCompetitorPrice(
                         date=date_str,
                         competitor_id=comp.id,
@@ -46,18 +51,25 @@ def scheduled_scraping_job():
                     ).first()
 
                     if not yesterday_data:
-                         y_price, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id)
-                         db.add(models.DBCompetitorPrice(
-                            date=yesterday_str,
-                            competitor_id=comp.id,
-                            price=y_price,
-                            is_fully_booked=False,
-                            scraped_at=datetime.datetime.now().isoformat()
-                        ))
-                         yesterday_data = models.DBCompetitorPrice(price=y_price)
+                         try:
+                             y_price, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id)
+                             db.add(models.DBCompetitorPrice(
+                                date=yesterday_str,
+                                competitor_id=comp.id,
+                                price=y_price,
+                                is_fully_booked=False,
+                                scraped_at=datetime.datetime.now().isoformat()
+                            ))
+                             yesterday_data = models.DBCompetitorPrice(price=y_price)
+                         except Exception as e:
+                             print(f"[Scheduler Error] Failed to extract yesterday price for {comp.name}: {e}")
+                             pass
 
                     # 2. Check for alert conditions (Hardcoded > 3000 JPY or sellout for now)
-                    diff = price - yesterday_data.price
+                    if yesterday_data:
+                        diff = price - yesterday_data.price
+                    else:
+                        diff = 0
 
                     if is_booked:
                         alerts_generated.append(f"【{date_str}】 {comp.name} が満室になりました。")
@@ -70,7 +82,7 @@ def scheduled_scraping_job():
 
         # 3. Send consolidated LINE notification if there are alerts
         if alerts_generated:
-            msg = "\n".join(["\n[レベニューアシスタント アラート]"] + alerts_generated)
+            msg = "\n".join(["\n[マーケティングアシスタント アラート]"] + alerts_generated)
             notifier_service.send_message(msg)
 
         print(f"[{datetime.datetime.now()}] [Scheduler] Sync completed.")
@@ -84,10 +96,7 @@ def scheduled_scraping_job():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # In production, this would run daily at 10:00 AM:
-    # scheduler.add_job(scheduled_scraping_job, 'cron', hour=10, minute=0)
-
-    # For testing/demo purposes, we run it every 5 minutes
-    scheduler.add_job(scheduled_scraping_job, 'interval', minutes=5)
+    # Run daily at 10:00 AM for production
+    scheduler.add_job(scheduled_scraping_job, 'cron', hour=10, minute=0)
 
     scheduler.start()

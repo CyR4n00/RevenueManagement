@@ -1,11 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const API_BASE = 'http://localhost:8000';
+
+interface Competitor {
+  id: number;
+  name: string;
+  url: string;
+}
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const [competitors, setCompetitors] = useState([
-    { id: 101, name: 'ホテルA (近隣リゾート)', url: 'https://travel.rakuten.co.jp/HOTEL/12345/' },
-    { id: 102, name: 'ゲストハウスB (駅前)', url: 'https://www.booking.com/hotel/jp/sample.html' },
-    { id: 103, name: 'Cヴィラ (一棟貸し)', url: 'https://www.airbnb.jp/rooms/98765' }
-  ]);
+  const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  const [minPrice, setMinPrice] = useState(5000);
+  const [maxPrice, setMaxPrice] = useState(30000);
+  const [apifyKey, setApifyKey] = useState('');
+  const [lineToken, setLineToken] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/settings`);
+        setCompetitors(res.data.competitors);
+        setMinPrice(res.data.min_price);
+        setMaxPrice(res.data.max_price);
+        setApifyKey(res.data.apify_api_key || '');
+        setLineToken(res.data.line_notify_token || '');
+      } catch (e) {
+        console.error("Failed to fetch settings", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      await axios.post(`${API_BASE}/settings`, {
+        min_price: minPrice,
+        max_price: maxPrice,
+        apify_api_key: apifyKey,
+        line_notify_token: lineToken,
+        competitors: competitors
+      });
+      onClose();
+    } catch (e) {
+      console.error("Failed to save settings", e);
+      alert("設定の保存に失敗しました。");
+    }
+  };
+
+  const handleCompChange = (id: number, field: 'name' | 'url', value: string) => {
+    setCompetitors(competitors.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const addCompetitor = () => {
+    const newId = competitors.length > 0 ? Math.max(...competitors.map(c => c.id)) + 1 : 1;
+    setCompetitors([...competitors, { id: newId, name: '', url: '' }]);
+  };
+
+  const removeCompetitor = (id: number) => {
+    setCompetitors(competitors.filter(c => c.id !== id));
+  };
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-gray-500" aria-busy="true">読み込み中...</div>;
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 mb-8">
@@ -29,14 +90,18 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                  </div>
                  <div className="flex-1 w-full">
                    <label htmlFor={`comp-name-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
-                   <input id={`comp-name-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
+                   <input id={`comp-name-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" value={comp.name} onChange={(e) => handleCompChange(comp.id, 'name', e.target.value)} />
                  </div>
                  <div className="flex-2 w-full md:w-1/2">
                    <label htmlFor={`comp-url-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
-                   <input id={`comp-url-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
+                   <input id={`comp-url-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" value={comp.url} onChange={(e) => handleCompChange(comp.id, 'url', e.target.value)} />
                  </div>
+                 <button aria-label="競合を削除" onClick={() => removeCompetitor(comp.id)} className="text-red-500 hover:text-red-700 font-bold px-2 py-1 focus-visible:ring-2 focus-visible:outline-none rounded shrink-0">削除</button>
               </div>
             ))}
+            <button onClick={addCompetitor} className="text-sm text-blue-600 font-bold border border-blue-600 rounded px-4 py-2 hover:bg-blue-50 focus-visible:ring-2 focus-visible:outline-none mt-2">
+              + 競合施設を追加
+            </button>
           </div>
           <div className="mt-4 text-xs text-gray-500 flex items-start bg-gray-50 p-3 rounded border">
             <span className="mr-2">ℹ️</span>
@@ -58,15 +123,34 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <label htmlFor="min_price" className="block text-xs font-bold text-gray-500 mb-1">最低販売価格（これ以上は下げない）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="min_price" type="number" defaultValue="5000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="min_price" type="number" value={minPrice} onChange={(e) => setMinPrice(Number(e.target.value))} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
               </div>
             </div>
             <div className="flex-1">
               <label htmlFor="max_price" className="block text-xs font-bold text-gray-500 mb-1">最高販売価格（これ以上は上げない）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="max_price" type="number" defaultValue="30000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="max_price" type="number" value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* API Integrations */}
+        <div>
+          <div className="flex items-center justify-between border-b pb-2 mb-4">
+            <h3 className="font-bold text-gray-700">3. システム連携設定 (API)</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            外部サービスと連携するための設定です。
+          </p>
+
+          <div className="space-y-4">
+            <div className="border p-4 rounded-lg bg-gray-50">
+               <h4 className="font-bold text-gray-700 mb-2">Apify API Key (スクレイピング連携)</h4>
+               <label htmlFor="apify-key" className="sr-only">Apify API Key</label>
+               <input id="apify-key" type="password" value={apifyKey} onChange={(e) => setApifyKey(e.target.value)} placeholder="apify_api_..." className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+               <p className="text-xs text-gray-500 mt-1">※設定しない場合は開発用のモックデータが使用されます。</p>
             </div>
           </div>
         </div>
@@ -74,7 +158,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         {/* Notifications Settings */}
         <div>
           <div className="flex items-center justify-between border-b pb-2 mb-4">
-            <h3 className="font-bold text-gray-700">3. 変動アラートの外部通知設定</h3>
+            <h3 className="font-bold text-gray-700">4. 変動アラートの外部通知設定</h3>
             <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded font-bold">推奨機能</span>
           </div>
           <p className="text-sm text-gray-600 mb-4">
@@ -87,12 +171,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                <h4 className="font-bold text-green-700 flex items-center mb-3">
                  <span className="mr-2">💬</span> LINE通知連携
                </h4>
-               <label htmlFor="notify-line" className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
-                 <input id="notify-line" type="checkbox" defaultChecked={true} className="rounded text-green-600 focus:ring-green-500" />
-                 <span>LINEで通知を受け取る</span>
-               </label>
-               <button className="w-full bg-[#06C755] text-white font-bold py-2 rounded shadow hover:bg-green-600 transition-colors text-sm mt-2 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500 focus-visible:outline-none">
-                 LINEアカウントと連携する
+               <label htmlFor="line-token" className="block text-xs font-bold text-gray-700 mb-1">LINE Notify トークン</label>
+               <input id="line-token" type="password" value={lineToken} onChange={(e) => setLineToken(e.target.value)} placeholder="LINE Notify トークンを入力" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-green-400 outline-none mb-2" />
+               <button className="w-full bg-[#06C755] text-white font-bold py-2 rounded shadow hover:bg-green-600 transition-colors text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500 focus-visible:outline-none">
+                 LINEアカウントと連携する (ヘルプ)
                </button>
             </div>
 
@@ -134,7 +216,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex justify-end pt-4 border-t">
-          <button onClick={onClose} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none">
+          <button onClick={handleSave} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none">
             設定を保存して戻る
           </button>
         </div>

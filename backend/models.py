@@ -20,6 +20,12 @@ class DBCompetitor(Base):
     name = Column(String, index=True)
     url = Column(String)
 
+class DBSystemConfig(Base):
+    __tablename__ = "system_config"
+    id = Column(Integer, primary_key=True, index=True)
+    apify_api_key = Column(String, nullable=True)
+    line_notify_token = Column(String, nullable=True)
+
 class DBCompetitorPrice(Base):
     __tablename__ = "competitor_prices"
     id = Column(Integer, primary_key=True, index=True)
@@ -46,6 +52,18 @@ class Competitor(BaseModel):
     name: str
     url: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+class SystemConfig(BaseModel):
+    apify_api_key: Optional[str] = None
+    line_notify_token: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class SettingsPayload(BaseModel):
+    min_price: int
+    max_price: int
+    apify_api_key: Optional[str] = None
+    line_notify_token: Optional[str] = None
+    competitors: List[Competitor]
 
 class CompetitorPrice(BaseModel):
     date: str

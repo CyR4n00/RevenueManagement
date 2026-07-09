@@ -15,29 +15,37 @@ class OTAScraper:
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"
         }
-        self.apify_token = os.getenv("APIFY_API_TOKEN")
 
     def extract_price(self, url: str, target_date: str, comp_id: int) -> tuple[int, bool]:
         """
         Attempts to scrape the price from the given OTA URL.
         Returns a tuple: (price, is_fully_booked)
         """
+        from database import SessionLocal
+        from models import DBSystemConfig
+
+        apify_token = None
+        with SessionLocal() as db:
+            sys_config = db.query(DBSystemConfig).first()
+            apify_token = sys_config.apify_api_key if sys_config and sys_config.apify_api_key else os.getenv("APIFY_API_TOKEN")
+
         # If we have a real Apify token configured (not the placeholder), attempt to use it
-        if self.apify_token and self.apify_token != "your_apify_token_here":
+        if apify_token and apify_token != "your_apify_token_here":
             try:
-                # Mock Apify Actor call (In production, replace with actual Actor ID for Booking/Rakuten)
-                # Example:
-                # client = ApifyClient(self.apify_token)
-                # run_input = { "startUrls": [{"url": url}], "checkIn": target_date }
-                # run = client.actor("apify/booking-scraper").call(run_input=run_input)
-                # results = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-                # ... parse results ...
-                print(f"[Scraper] Apify integration called for {url}")
-                pass
+                client = ApifyClient(apify_token)
+                run_input = { "startUrls": [{"url": url}], "checkIn": target_date }
+
+                if "booking.com" in url:
+                    run = client.actor("voyager/booking-scraper").call(run_input=run_input)
+                    for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+                        if "price" in item:
+                            return int(item["price"]), False
+                else:
+                    print(f"[Scraper] Apify generic call for {url}")
             except Exception as e:
                 print(f"[Scraper] Apify call failed: {e}")
 
-        # Attempt naive direct scraping for Rakuten as a fallback before random simulation
+        # Attempt naive direct scraping for Rakuten as a fallback
         try:
             date_obj = datetime.datetime.strptime(target_date, "%Y-%m-%d").date()
             if "rakuten.co.jp" in url:
@@ -58,41 +66,11 @@ class OTAScraper:
                             if 3000 <= clean_price <= 100000:
                                 return clean_price, False
 
-            print(f"[Scraper] Could not reliably parse {url}. Using simulation.")
-            return self._fallback_simulation(target_date, comp_id)
+            print(f"[Scraper] Could not reliably parse {url}.")
+            raise ValueError("No price data could be extracted.")
 
         except Exception as e:
-            print(f"[Scraper Error] Failed to scrape {url}: {e}. Using fallback.")
-            return self._fallback_simulation(target_date, comp_id)
-
-    def _fallback_simulation(self, target_date_str: str, comp_id: int) -> tuple[int, bool]:
-        """
-        Deterministic fallback to simulate market data when direct scraping is blocked/unavailable.
-        """
-        seed_str = f"comp_scrape_{comp_id}_{target_date_str}"
-        random.seed(seed_str)
-
-        target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
-        is_weekend = target_date.weekday() >= 4
-
-        base = 12000 if comp_id == 1 else (8000 if comp_id == 2 else 15000)
-        if is_weekend:
-            base = int(base * 1.3)
-
-        change_type = random.choice(["none", "none", "up", "down", "big_up"])
-        price = base + random.randint(-500, 500)
-
-        if change_type == "up":
-            price += random.choice([500, 1000])
-        elif change_type == "down":
-            price -= random.choice([500, 1000])
-        elif change_type == "big_up":
-            price += random.choice([3000, 4000, 5000])
-
-        is_fully_booked = False
-        if is_weekend and random.random() > 0.8:
-            is_fully_booked = True
-
-        return price, is_fully_booked
+            print(f"[Scraper Error] Failed to scrape {url}: {e}.")
+            raise ValueError(f"Failed to scrape: {str(e)}")
 
 scraper_service = OTAScraper()

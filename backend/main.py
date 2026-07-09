@@ -23,11 +23,11 @@ async def lifespan(app: FastAPI):
     db_dependency = app.dependency_overrides.get(get_db, get_db)
     db = next(db_dependency())
     if not db.query(models.DBFacility).first():
-        db.add(models.DBFacility(id=1, name="自社ホテル（サンプル）", base_price=10000))
-        # Add real URLs for demonstration
-        db.add(models.DBCompetitor(id=1, name="ホテルA (アパ新宿)", url="https://travel.rakuten.co.jp/HOTEL/14138/14138.html"))
-        db.add(models.DBCompetitor(id=2, name="ゲストハウスB (東京駅前)", url="https://www.booking.com/hotel/jp/tokyo-station.ja.html"))
-        db.add(models.DBCompetitor(id=3, name="Cヴィラ (京都鴨川)", url="https://travel.rakuten.co.jp/HOTEL/180290/180290.html"))
+        db.add(models.DBFacility(id=1, name="自社ホテル", base_price=10000, min_price=5000, max_price=30000))
+        db.commit()
+
+    if not db.query(models.DBSystemConfig).first():
+        db.add(models.DBSystemConfig(id=1))
         db.commit()
 
     # Start the background scheduler
@@ -47,7 +47,6 @@ app.add_middleware(
 def run_scraper(db: Session, date_str: str):
     """
     Runs the scraper for all competitors for a given date.
-    If direct scraping fails, it uses the fallback simulation.
     """
     target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
     yesterday_str = (target_date - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -67,7 +66,11 @@ def run_scraper(db: Session, date_str: str):
             continue # Already scraped
 
         print(f"[API] Running scraper for {comp.name} on {date_str}...")
-        price_today, is_fully_booked = scraper_service.extract_price(comp.url, date_str, comp.id)
+        try:
+            price_today, is_fully_booked = scraper_service.extract_price(comp.url, date_str, comp.id)
+        except Exception as e:
+            print(f"[API Error] Scraping failed for {comp.name} on {date_str}: {e}")
+            continue
 
         # Ensure yesterday's data exists for difference calculation
         existing_yesterday = db.query(models.DBCompetitorPrice).filter(
@@ -77,14 +80,18 @@ def run_scraper(db: Session, date_str: str):
 
         if not existing_yesterday:
              # Run scraper for yesterday too to get a baseline
-             price_yesterday, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id)
-             db.add(models.DBCompetitorPrice(
-                date=yesterday_str,
-                competitor_id=comp.id,
-                price=price_yesterday,
-                is_fully_booked=False,
-                scraped_at=datetime.datetime.now().isoformat()
-            ))
+             try:
+                 price_yesterday, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id)
+                 db.add(models.DBCompetitorPrice(
+                    date=yesterday_str,
+                    competitor_id=comp.id,
+                    price=price_yesterday,
+                    is_fully_booked=False,
+                    scraped_at=datetime.datetime.now().isoformat()
+                ))
+             except Exception as e:
+                 print(f"[API Error] Scraping failed for {comp.name} on yesterday ({yesterday_str}): {e}")
+                 pass
 
         db.add(models.DBCompetitorPrice(
             date=date_str,
@@ -108,6 +115,55 @@ def get_facility(db: Session = Depends(get_db)):
 @app.get("/competitors", response_model=List[models.Competitor])
 def get_competitors(db: Session = Depends(get_db)):
     return db.query(models.DBCompetitor).all()
+
+@app.get("/settings")
+def get_settings(db: Session = Depends(get_db)):
+    facility = db.query(models.DBFacility).first()
+    system_config = db.query(models.DBSystemConfig).first()
+    competitors = db.query(models.DBCompetitor).all()
+    return {
+        "min_price": facility.min_price if facility else 5000,
+        "max_price": facility.max_price if facility else 30000,
+        "apify_api_key": system_config.apify_api_key if system_config else None,
+        "line_notify_token": system_config.line_notify_token if system_config else None,
+        "competitors": [{"id": c.id, "name": c.name, "url": c.url} for c in competitors]
+    }
+
+@app.post("/settings")
+def update_settings(payload: models.SettingsPayload, db: Session = Depends(get_db)):
+    facility = db.query(models.DBFacility).first()
+    if facility:
+        facility.min_price = payload.min_price
+        facility.max_price = payload.max_price
+
+    system_config = db.query(models.DBSystemConfig).first()
+    if system_config:
+        system_config.apify_api_key = payload.apify_api_key
+        system_config.line_notify_token = payload.line_notify_token
+    else:
+        db.add(models.DBSystemConfig(id=1, apify_api_key=payload.apify_api_key, line_notify_token=payload.line_notify_token))
+
+    # Update existing competitors or add new ones
+    existing_comps = {c.id: c for c in db.query(models.DBCompetitor).all()}
+    payload_comp_ids = {c.id for c in payload.competitors}
+
+    # Delete competitors not in the payload
+    for comp_id, comp in existing_comps.items():
+        if comp_id not in payload_comp_ids:
+            # Also delete historical prices to maintain referential integrity
+            db.query(models.DBCompetitorPrice).filter(models.DBCompetitorPrice.competitor_id == comp_id).delete()
+            db.delete(comp)
+
+    # Add or update
+    for comp_data in payload.competitors:
+        if comp_data.id in existing_comps:
+            existing_comps[comp_data.id].name = comp_data.name
+            existing_comps[comp_data.id].url = comp_data.url
+        else:
+            db.add(models.DBCompetitor(id=comp_data.id, name=comp_data.name, url=comp_data.url))
+
+    db.commit()
+    return {"message": "Settings updated successfully"}
 
 @app.get("/market_data", response_model=List[models.CompetitorPrice])
 def get_market_data(start_date: str, days: int = 7, db: Session = Depends(get_db)):
@@ -189,8 +245,18 @@ def price_to_rank(price: int) -> str:
 
 @app.get("/recommendation", response_model=models.MarketRecommendation)
 def get_recommendation(date: str, db: Session = Depends(get_db)):
-    comp_data = get_market_data(start_date=date, days=1, db=db)
     facility = get_facility(db)
+    comps = db.query(models.DBCompetitor).all()
+
+    if not comps:
+        return models.MarketRecommendation(
+            date=date,
+            suggested_price=facility.base_price,
+            suggested_rank=price_to_rank(facility.base_price),
+            reasoning="競合施設が登録されていません。設定画面から競合施設を登録してください。"
+        )
+
+    comp_data = get_market_data(start_date=date, days=1, db=db)
 
     available_comps = [c for c in comp_data if not c.is_fully_booked]
     if not available_comps:

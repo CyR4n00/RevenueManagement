@@ -16,6 +16,6 @@ test('renders app header', async () => {
   await act(async () => {
     render(<App />);
   });
-  const headerElement = screen.getByText(/レベニューアシスタント/i);
+  const headerElement = screen.getByText(/マーケティングアシスタント/i);
   expect(headerElement).toBeInTheDocument();
 });
