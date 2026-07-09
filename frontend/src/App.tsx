@@ -46,9 +46,10 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [pmsType, setPmsType] = useState('neppan');
 
   const handleDownloadCsv = () => {
-    window.open(`${API_BASE}/export_csv?start_date=${selectedDate}&days=7`, '_blank');
+    window.open(`${API_BASE}/export_csv?start_date=${selectedDate}&pms_type=${pmsType}&days=7`, '_blank');
   };
 
   const fetchData = async () => {
@@ -145,13 +146,28 @@ function App() {
                      <p className="mt-4 text-blue-200">データ分析中...</p>
                    )}
                 </div>
-                <button
-                  aria-label="サイトコントローラー用CSVをダウンロード"
-                  onClick={handleDownloadCsv}
-                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-300 focus-visible:outline-none"
-                >
-                  📥 サイトコントローラー用CSVをダウンロード
-                </button>
+                <div className="mt-6 space-y-2">
+                  <div className="flex flex-col space-y-1">
+                    <label htmlFor="pms-select" className="text-xs text-blue-100 font-bold">出力フォーマット (PMS)</label>
+                    <select
+                      id="pms-select"
+                      className="p-2 border border-blue-400 rounded bg-blue-700 text-white text-sm outline-none focus:ring-2 focus:ring-blue-300"
+                      value={pmsType}
+                      onChange={(e) => setPmsType(e.target.value)}
+                    >
+                      <option value="neppan">ねっぱん！</option>
+                      <option value="tl-lincoln">TL-リンカーン</option>
+                      <option value="temairazu">手間いらず</option>
+                    </select>
+                  </div>
+                  <button
+                    aria-label="サイトコントローラー用CSVをダウンロード"
+                    onClick={handleDownloadCsv}
+                    className="w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-300 focus-visible:outline-none"
+                  >
+                    📥 サイトコントローラー用CSVをダウンロード
+                  </button>
+                </div>
               </div>
 
               {/* Alerts Panel */}

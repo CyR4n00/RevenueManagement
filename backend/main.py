@@ -227,7 +227,7 @@ def get_recommendation(date: str, db: Session = Depends(get_db)):
     )
 
 @app.get("/export_csv")
-def export_csv(start_date: str, days: int = 7, db: Session = Depends(get_db)):
+def export_csv(start_date: str, pms_type: str = "neppan", days: int = 7, db: Session = Depends(get_db)):
     start = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
 
     output = io.StringIO()
@@ -235,21 +235,31 @@ def export_csv(start_date: str, days: int = 7, db: Session = Depends(get_db)):
     output.write('\ufeff')
     writer = csv.writer(output)
 
-    # 国内の代表的なサイトコントローラー（ねっぱん！等）のCSV取込フォーマットを模したヘッダー
-    writer.writerow(["対象年月日", "部屋タイプコード", "部屋タイプ名", "適用料金ランク", "設定料金(参考)"])
+    if pms_type == "tl-lincoln":
+        writer.writerow(["利用日", "部屋タイプ", "料金"])
+    elif pms_type == "temairazu":
+        writer.writerow(["日付", "部屋コード", "金額"])
+    else:
+        # 共通デフォルト (neppan)
+        writer.writerow(["対象年月日", "部屋タイプコード", "部屋タイプ名", "適用料金ランク", "設定料金(参考)"])
 
     for i in range(days):
         current_date_str = (start + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
         rec = get_recommendation(current_date_str, db)
 
-        # デモ用に固定の部屋タイプに対してランクを出力
         # 日付は YYYY/MM/DD 形式に変換
         formatted_date = current_date_str.replace("-", "/")
-        writer.writerow([formatted_date, "RM01", "スタンダードツイン", rec.suggested_rank, rec.suggested_price])
+
+        if pms_type == "tl-lincoln":
+            writer.writerow([formatted_date, "スタンダードツイン", rec.suggested_price])
+        elif pms_type == "temairazu":
+            writer.writerow([formatted_date, "RM01", rec.suggested_price])
+        else:
+            writer.writerow([formatted_date, "RM01", "スタンダードツイン", rec.suggested_rank, rec.suggested_price])
 
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=pms_upload_{start_date}.csv"}
+        headers={"Content-Disposition": f"attachment; filename=pms_upload_{start_date}_{pms_type}.csv"}
     )
