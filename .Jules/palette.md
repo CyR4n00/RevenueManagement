@@ -1,0 +1,3 @@
+## 2024-05-18 - Dashboard Async Loading Pattern
+**Learning:** For dashboard views where data fetches frequently (e.g. changing dates), full-page skeleton loaders can cause jarring layout shifts. Users prefer seeing the existing data structure with a visual cue that it's updating.
+**Action:** Implemented a non-intrusive loading pattern using a wrapper container with `transition-opacity duration-200 ${isLoading ? 'opacity-50 pointer-events-none' : ''}` and `aria-busy={isLoading}`. This provides immediate accessible visual feedback without breaking the layout or requiring custom spinner components, satisfying the rule to use existing CSS framework classes.

@@ -46,12 +46,14 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleDownloadCsv = () => {
     window.open(`${API_BASE}/export_csv?start_date=${selectedDate}&days=7`, '_blank');
   };
 
   const fetchData = async () => {
+    setIsLoading(true);
     try {
       // Calculate next 7 days starting from selected date
       const start = new Date(selectedDate);
@@ -74,6 +76,8 @@ function App() {
       setRecommendation(recRes.data);
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -96,16 +100,19 @@ function App() {
           <div className="flex space-x-3 items-center">
              <input
               type="date"
-              className="p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700"
+              aria-label="基準日を選択"
+              className={`p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
+              disabled={isLoading}
             />
             <div className="h-6 border-l border-gray-300"></div>
             <button
                aria-label={showSettings ? "ベンチマーク設定を閉じる" : "ベンチマーク設定を開く"}
                aria-expanded={showSettings}
                onClick={() => setShowSettings(!showSettings)}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+               disabled={isLoading}
+               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
              >
                ⚙️ ベンチマーク設定
             </button>
@@ -115,7 +122,7 @@ function App() {
         {showSettings ? (
            <SettingsPanel onClose={() => setShowSettings(false)} />
         ) : (
-          <div className="space-y-6">
+          <div className={`space-y-6 transition-opacity duration-200 ${isLoading ? 'opacity-50 pointer-events-none' : ''}`} aria-busy={isLoading}>
 
             {/* Top Row: AI Suggestion & Alerts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
