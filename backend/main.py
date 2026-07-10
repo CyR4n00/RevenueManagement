@@ -124,9 +124,33 @@ def set_config(key: str, payload: models.SystemConfig, db: Session = Depends(get
 def get_facility(db: Session = Depends(get_db)):
     return db.query(models.DBFacility).first()
 
+from fastapi import HTTPException
+
+@app.put("/facility", response_model=models.Facility)
+def update_facility(payload: models.FacilityUpdate, db: Session = Depends(get_db)):
+    facility = db.query(models.DBFacility).first()
+    if not facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    facility.min_price = payload.min_price
+    facility.max_price = payload.max_price
+    db.commit()
+    db.refresh(facility)
+    return facility
+
 @app.get("/competitors", response_model=List[models.Competitor])
 def get_competitors(db: Session = Depends(get_db)):
     return db.query(models.DBCompetitor).all()
+
+@app.put("/competitors/{comp_id}", response_model=models.Competitor)
+def update_competitor(comp_id: int, payload: models.CompetitorUpdate, db: Session = Depends(get_db)):
+    comp = db.query(models.DBCompetitor).filter(models.DBCompetitor.id == comp_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+    comp.name = payload.name
+    comp.url = payload.url
+    db.commit()
+    db.refresh(comp)
+    return comp
 
 @app.get("/market_data", response_model=List[models.CompetitorPrice])
 def get_market_data(start_date: str, days: int = 7, db: Session = Depends(get_db)):

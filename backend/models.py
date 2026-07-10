@@ -57,6 +57,14 @@ class Competitor(BaseModel):
     url: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
+class FacilityUpdate(BaseModel):
+    min_price: int
+    max_price: int
+
+class CompetitorUpdate(BaseModel):
+    name: str
+    url: str
+
 class CompetitorPrice(BaseModel):
     date: str
     competitor_id: int
