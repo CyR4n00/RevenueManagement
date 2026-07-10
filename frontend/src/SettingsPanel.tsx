@@ -1,11 +1,71 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const API_BASE = 'http://localhost:8000';
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const [competitors, setCompetitors] = useState([
-    { id: 101, name: 'ホテルA (近隣リゾート)', url: 'https://travel.rakuten.co.jp/HOTEL/12345/' },
-    { id: 102, name: 'ゲストハウスB (駅前)', url: 'https://www.booking.com/hotel/jp/sample.html' },
-    { id: 103, name: 'Cヴィラ (一棟貸し)', url: 'https://www.airbnb.jp/rooms/98765' }
-  ]);
+  const [competitors, setCompetitors] = useState<{ id: number; name: string; url: string }[]>([]);
+  const [minPrice, setMinPrice] = useState(5000);
+  const [maxPrice, setMaxPrice] = useState(30000);
+  const [notifyLine, setNotifyLine] = useState(true);
+  const [notifyEmail, setNotifyEmail] = useState(false);
+  const [emailAddress, setEmailAddress] = useState("");
+  const [notifyThreshold, setNotifyThreshold] = useState(3000);
+  const [notifyTiming, setNotifyTiming] = useState("morning");
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const [compRes, facRes] = await Promise.all([
+          axios.get(`${API_BASE}/competitors`),
+          axios.get(`${API_BASE}/facility`)
+        ]);
+        setCompetitors(compRes.data);
+        setMinPrice(facRes.data.min_price);
+        setMaxPrice(facRes.data.max_price);
+        setNotifyLine(facRes.data.notify_line);
+        setNotifyEmail(facRes.data.notify_email);
+        setEmailAddress(facRes.data.email_address || "");
+        setNotifyThreshold(facRes.data.notify_threshold);
+        setNotifyTiming(facRes.data.notify_timing);
+        setIsLoading(false);
+      } catch (err) {
+        console.error("Failed to load settings", err);
+        setIsLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      await Promise.all([
+        axios.put(`${API_BASE}/facility`, {
+          min_price: minPrice,
+          max_price: maxPrice,
+          notify_line: notifyLine,
+          notify_email: notifyEmail,
+          email_address: emailAddress,
+          notify_threshold: notifyThreshold,
+          notify_timing: notifyTiming
+        }),
+        axios.put(`${API_BASE}/competitors`, competitors)
+      ]);
+      onClose();
+    } catch (err) {
+      console.error("Failed to save settings", err);
+      alert("保存に失敗しました。");
+    }
+  };
+
+  const handleCompChange = (id: number, field: 'name' | 'url', value: string) => {
+    setCompetitors(comps => comps.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-gray-500">設定を読み込み中...</div>;
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 mb-8">
@@ -29,11 +89,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                  </div>
                  <div className="flex-1 w-full">
                    <label htmlFor={`comp-name-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
-                   <input id={`comp-name-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
+                   <input id={`comp-name-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" value={comp.name} onChange={e => handleCompChange(comp.id, 'name', e.target.value)} />
                  </div>
                  <div className="flex-2 w-full md:w-1/2">
                    <label htmlFor={`comp-url-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
-                   <input id={`comp-url-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
+                   <input id={`comp-url-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" value={comp.url} onChange={e => handleCompChange(comp.id, 'url', e.target.value)} />
                  </div>
               </div>
             ))}
@@ -58,14 +118,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <label htmlFor="min_price" className="block text-xs font-bold text-gray-500 mb-1">最低販売価格（これ以上は下げない）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="min_price" type="number" defaultValue="5000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="min_price" type="number" value={minPrice} onChange={e => setMinPrice(Number(e.target.value))} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
               </div>
             </div>
             <div className="flex-1">
               <label htmlFor="max_price" className="block text-xs font-bold text-gray-500 mb-1">最高販売価格（これ以上は上げない）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="max_price" type="number" defaultValue="30000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="max_price" type="number" value={maxPrice} onChange={e => setMaxPrice(Number(e.target.value))} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
               </div>
             </div>
           </div>
@@ -88,7 +148,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                  <span className="mr-2">💬</span> LINE通知連携
                </h4>
                <label htmlFor="notify-line" className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
-                 <input id="notify-line" type="checkbox" defaultChecked={true} className="rounded text-green-600 focus:ring-green-500" />
+                 <input id="notify-line" type="checkbox" checked={notifyLine} onChange={e => setNotifyLine(e.target.checked)} className="rounded text-green-600 focus:ring-green-500" />
                  <span>LINEで通知を受け取る</span>
                </label>
                <button className="w-full bg-[#06C755] text-white font-bold py-2 rounded shadow hover:bg-green-600 transition-colors text-sm mt-2 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500 focus-visible:outline-none">
@@ -101,11 +161,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                  <span className="mr-2">📧</span> メール通知
                </h4>
                <label htmlFor="notify-email" className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
-                 <input id="notify-email" type="checkbox" defaultChecked={false} className="rounded text-blue-600 focus:ring-blue-500" />
+                 <input id="notify-email" type="checkbox" checked={notifyEmail} onChange={e => setNotifyEmail(e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500" />
                  <span>メールで通知を受け取る</span>
                </label>
                <label htmlFor="email-input" className="sr-only">メールアドレス</label>
-               <input id="email-input" type="email" placeholder="example@hotel.com" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none mt-1" />
+               <input id="email-input" type="email" placeholder="example@hotel.com" value={emailAddress} onChange={e => setEmailAddress(e.target.value)} className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none mt-1" />
             </div>
           </div>
 
@@ -115,15 +175,15 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div>
                  <label htmlFor="threshold-select" className="block text-xs font-bold text-gray-500 mb-1">通知を送る「価格変動」のしきい値</label>
-                 <select id="threshold-select" defaultValue="3000" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
-                   <option value="1000">1,000円以上の変動で通知</option>
-                   <option value="3000">3,000円以上の変動で通知 (推奨)</option>
-                   <option value="5000">5,000円以上の変動で通知</option>
+                 <select id="threshold-select" value={notifyThreshold} onChange={e => setNotifyThreshold(Number(e.target.value))} className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                   <option value={1000}>1,000円以上の変動で通知</option>
+                   <option value={3000}>3,000円以上の変動で通知 (推奨)</option>
+                   <option value={5000}>5,000円以上の変動で通知</option>
                  </select>
                </div>
                <div>
                  <label htmlFor="timing-select" className="block text-xs font-bold text-gray-500 mb-1">通知のタイミング</label>
-                 <select id="timing-select" defaultValue="morning" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                 <select id="timing-select" value={notifyTiming} onChange={e => setNotifyTiming(e.target.value)} className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
                    <option value="immediate">変動を検知したら即時</option>
                    <option value="morning">1日1回 朝10時にまとめて通知 (推奨)</option>
                    <option value="evening">1日1回 夕方17時にまとめて通知</option>
@@ -134,7 +194,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex justify-end pt-4 border-t">
-          <button onClick={onClose} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none">
+          <button onClick={handleSave} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none">
             設定を保存して戻る
           </button>
         </div>

@@ -105,9 +105,42 @@ def run_scraper(db: Session, date_str: str):
 def get_facility(db: Session = Depends(get_db)):
     return db.query(models.DBFacility).first()
 
+@app.put("/facility", response_model=models.Facility)
+def update_facility(facility_in: models.FacilityUpdate, db: Session = Depends(get_db)):
+    facility = db.query(models.DBFacility).first()
+    if not facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+
+    facility.min_price = facility_in.min_price
+    facility.max_price = facility_in.max_price
+    facility.notify_line = facility_in.notify_line
+    facility.notify_email = facility_in.notify_email
+    facility.email_address = facility_in.email_address
+    facility.notify_threshold = facility_in.notify_threshold
+    facility.notify_timing = facility_in.notify_timing
+
+    db.commit()
+    db.refresh(facility)
+    return facility
+
 @app.get("/competitors", response_model=List[models.Competitor])
 def get_competitors(db: Session = Depends(get_db)):
     return db.query(models.DBCompetitor).all()
+
+@app.put("/competitors")
+def update_competitors(competitors_in: List[models.CompetitorUpdate], db: Session = Depends(get_db)):
+    # Simple approach for MVP: delete existing and insert new
+    db.query(models.DBCompetitor).delete()
+
+    new_comps = []
+    for i, comp_in in enumerate(competitors_in):
+        # We manually assign IDs 1, 2, 3... to keep things simple for the demo
+        new_comp = models.DBCompetitor(id=i+1, name=comp_in.name, url=comp_in.url)
+        db.add(new_comp)
+        new_comps.append(new_comp)
+
+    db.commit()
+    return {"message": "Competitors updated successfully"}
 
 @app.get("/market_data", response_model=List[models.CompetitorPrice])
 def get_market_data(start_date: str, days: int = 7, db: Session = Depends(get_db)):
