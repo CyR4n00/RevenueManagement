@@ -5,32 +5,52 @@ const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [apifyApiKey, setApifyApiKey] = useState('');
-  const [competitors, setCompetitors] = useState([
-    { id: 101, name: 'ホテルA (近隣リゾート)', url: 'https://travel.rakuten.co.jp/HOTEL/12345/' },
-    { id: 102, name: 'ゲストハウスB (駅前)', url: 'https://www.booking.com/hotel/jp/sample.html' },
-    { id: 103, name: 'Cヴィラ (一棟貸し)', url: 'https://www.airbnb.jp/rooms/98765' }
-  ]);
+  const [competitors, setCompetitors] = useState<any[]>([]);
+  const [facility, setFacility] = useState<any>({ min_price: 5000, max_price: 30000 });
 
   useEffect(() => {
-    // Load config from backend
-    axios.get(`${API_BASE}/config/APIFY_API_KEY`)
-      .then(res => {
-        if (res.data && res.data.value) {
-          setApifyApiKey(res.data.value);
-        }
-      })
-      .catch(err => console.error("Failed to load APIFY_API_KEY:", err));
+    const fetchSettingsData = async () => {
+      try {
+        const results = await Promise.allSettled([
+          axios.get(`${API_BASE}/config/APIFY_API_KEY`),
+          axios.get(`${API_BASE}/competitors`),
+          axios.get(`${API_BASE}/facility`)
+        ]);
+
+        if (results[0].status === 'fulfilled' && results[0].value.data && results[0].value.data.value) setApifyApiKey(results[0].value.data.value);
+        if (results[1].status === 'fulfilled' && results[1].value.data) setCompetitors(results[1].value.data);
+        if (results[2].status === 'fulfilled' && results[2].value.data) setFacility(results[2].value.data);
+      } catch (err) {
+        console.error("Failed to load settings data:", err);
+      }
+    };
+    fetchSettingsData();
   }, []);
 
   const handleSave = async () => {
     try {
       await axios.post(`${API_BASE}/config/APIFY_API_KEY`, { key: 'APIFY_API_KEY', value: apifyApiKey });
+
+      const compUpdates = competitors.map(comp =>
+        axios.put(`${API_BASE}/competitors/${comp.id}`, { name: comp.name, url: comp.url })
+      );
+      await Promise.all(compUpdates);
+
+      await axios.put(`${API_BASE}/facility`, {
+        min_price: facility.min_price,
+        max_price: facility.max_price
+      });
+
       onClose();
     } catch (err) {
-      console.error("Failed to save APIFY_API_KEY:", err);
+      console.error("Failed to save settings data:", err);
       // Even if it fails, close the panel for now
       onClose();
     }
+  };
+
+  const handleCompetitorChange = (id: number, field: string, value: string) => {
+    setCompetitors(comps => comps.map(c => c.id === id ? { ...c, [field]: value } : c));
   };
 
   return (
@@ -77,11 +97,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                  </div>
                  <div className="flex-1 w-full">
                    <label htmlFor={`comp-name-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
-                   <input id={`comp-name-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.name} />
+                   <input id={`comp-name-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" value={comp.name} onChange={(e) => handleCompetitorChange(comp.id, 'name', e.target.value)} />
                  </div>
                  <div className="flex-2 w-full md:w-1/2">
                    <label htmlFor={`comp-url-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
-                   <input id={`comp-url-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={comp.url} />
+                   <input id={`comp-url-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" value={comp.url} onChange={(e) => handleCompetitorChange(comp.id, 'url', e.target.value)} />
                  </div>
               </div>
             ))}
@@ -106,14 +126,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               <label htmlFor="min_price" className="block text-xs font-bold text-gray-500 mb-1">最低販売価格（これ以上は下げない）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="min_price" type="number" defaultValue="5000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="min_price" type="number" value={facility.min_price} onChange={(e) => setFacility({ ...facility, min_price: parseInt(e.target.value) || 0 })} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
               </div>
             </div>
             <div className="flex-1">
               <label htmlFor="max_price" className="block text-xs font-bold text-gray-500 mb-1">最高販売価格（これ以上は上げない）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="max_price" type="number" defaultValue="30000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="max_price" type="number" value={facility.max_price} onChange={(e) => setFacility({ ...facility, max_price: parseInt(e.target.value) || 0 })} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
               </div>
             </div>
           </div>
