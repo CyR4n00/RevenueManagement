@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from fastapi import FastAPI, Depends, HTTPException
 from contextlib import asynccontextmanager
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 import io
 import csv
 from typing import List
@@ -24,7 +24,9 @@ async def lifespan(app: FastAPI):
     db = next(db_dependency())
     if not db.query(models.DBFacility).first():
         db.add(models.DBFacility(id=1, name="自社ホテル（サンプル）", base_price=10000))
-        db.commit()
+        db.add(models.DBCompetitor(id=1, name="ホテルA (アパ新宿)", url="https://travel.rakuten.co.jp/HOTEL/14138/14138.html"))
+        db.add(models.DBCompetitor(id=2, name="ゲストハウスB (東京駅前)", url="https://www.booking.com/hotel/jp/tokyo-station.ja.html"))
+        db.add(models.DBCompetitor(id=3, name="Cヴィラ (京都鴨川)", url="https://travel.rakuten.co.jp/HOTEL/180290/180290.html"))
 
     # Start the background scheduler
     start_scheduler()
@@ -88,7 +90,9 @@ def run_scraper(db: Session, date_str: str):
             is_fully_booked=is_fully_booked,
             scraped_at=datetime.datetime.now().isoformat()
         ))
-    db.commit()
+
+
+
 
 
 # --- ENDPOINTS ---
@@ -109,7 +113,6 @@ def set_config(key: str, payload: models.SystemConfig, db: Session = Depends(get
         db.add(config)
     else:
         config.value = payload.value
-    db.commit()
     db.refresh(config)
     return config
 
@@ -203,14 +206,6 @@ def price_to_rank(price: int) -> str:
 def get_recommendation(date: str, db: Session = Depends(get_db)):
     comp_data = get_market_data(start_date=date, days=1, db=db)
     facility = get_facility(db)
-
-    if not facility:
-        return models.MarketRecommendation(
-            date=date,
-            suggested_price=0,
-            suggested_rank="D",
-            reasoning="自社施設が登録されていません。"
-        )
 
     available_comps = [c for c in comp_data if not c.is_fully_booked]
     if not available_comps:

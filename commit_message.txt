@@ -1,0 +1,6 @@
+refactor: strip mock data and Apify UI for prod readiness
+
+- Removed `Apify API Key` input field from the frontend `SettingsPanel` (now managed via server `.env`).
+- Exposed `DATABASE_URL` in backend `.env.example` to allow proper connection to Supabase/PostgreSQL. Added `psycopg2-binary` to dependencies.
+- Removed deterministic fallback mock data from `scraper.py` and default populated mock competitors from `main.py` lifespan to enforce real data usage.
+- Updated Playwright UI tests to verify the removal of the API Key input.

@@ -2,7 +2,6 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import datetime
-import random
 import os
 from apify_client import ApifyClient
 from dotenv import load_dotenv
@@ -31,6 +30,7 @@ class OTAScraper:
         """
         Attempts to scrape the price from the given OTA URL.
         Returns a tuple: (price, is_fully_booked)
+        Returns (0, False) if scraping fails gracefully without simulation.
         """
         apify_token = self._get_apify_token(db)
         # If we have a real Apify token configured (not the placeholder), attempt to use it
@@ -75,41 +75,11 @@ class OTAScraper:
                             if 3000 <= clean_price <= 100000:
                                 return clean_price, False
 
-            print(f"[Scraper] Could not reliably parse {url}. Using simulation.")
-            return self._fallback_simulation(target_date, comp_id)
+            print(f"[Scraper] Could not reliably parse {url}. Skipping.")
+            return 0, False
 
         except Exception as e:
-            print(f"[Scraper Error] Failed to scrape {url}: {e}. Using fallback.")
-            return self._fallback_simulation(target_date, comp_id)
-
-    def _fallback_simulation(self, target_date_str: str, comp_id: int) -> tuple[int, bool]:
-        """
-        Deterministic fallback to simulate market data when direct scraping is blocked/unavailable.
-        """
-        seed_str = f"comp_scrape_{comp_id}_{target_date_str}"
-        random.seed(seed_str)
-
-        target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
-        is_weekend = target_date.weekday() >= 4
-
-        base = 12000 if comp_id == 1 else (8000 if comp_id == 2 else 15000)
-        if is_weekend:
-            base = int(base * 1.3)
-
-        change_type = random.choice(["none", "none", "up", "down", "big_up"])
-        price = base + random.randint(-500, 500)
-
-        if change_type == "up":
-            price += random.choice([500, 1000])
-        elif change_type == "down":
-            price -= random.choice([500, 1000])
-        elif change_type == "big_up":
-            price += random.choice([3000, 4000, 5000])
-
-        is_fully_booked = False
-        if is_weekend and random.random() > 0.8:
-            is_fully_booked = True
-
-        return price, is_fully_booked
+            print(f"[Scraper Error] Failed to scrape {url}: {e}. Skipping.")
+            return 0, False
 
 scraper_service = OTAScraper()

@@ -12,16 +12,12 @@ test('Revenue Assistant - Competitor Dashboard Verification', async ({ page }) =
 
   // Open settings panel
   await page.click('button:has-text("⚙️ ベンチマーク設定")');
-  await page.waitForSelector('text=OTAのURL');
+  await page.waitForSelector('text=1. ベンチマーク（競合）登録');
 
-  // Verify API Key input is present
-  await page.waitForSelector('label[for="apify-api-key"]');
-  const input = page.locator('#apify-api-key');
-  await expect(input).toBeVisible();
+  // Verify API Key input is NOT present
+  await expect(page.locator('label[for="apify-api-key"]')).toBeHidden();
 
-  // Enter API Key and save
-  await input.fill('test_api_key_123');
-  await page.screenshot({ path: 'screenshots/settings_competitor_with_api_key.png', fullPage: true });
+  await page.screenshot({ path: 'screenshots/settings_competitor.png', fullPage: true });
   await page.click('button:has-text("設定を保存して戻る")');
 
   // Verify panel closed
