@@ -9,6 +9,8 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [competitors, setCompetitors] = useState<any[]>([]);
+  const [facility, setFacility] = useState<any>(null);
+  const [ranks, setRanks] = useState<any[]>([]);
 
   useEffect(() => {
     // Load config from backend
@@ -19,10 +21,52 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         }
       })
       .catch(err => console.error("Failed to load competitors:", err));
+
+    axios.get(`${API_BASE}/facility`)
+      .then(res => {
+        if (res.data) setFacility(res.data);
+      })
+      .catch(err => console.error("Failed to load facility:", err));
+
+    axios.get(`${API_BASE}/ranks`)
+      .then(res => {
+        if (res.data && res.data.length > 0) {
+          setRanks(res.data);
+        }
+      })
+      .catch(err => console.error("Failed to load ranks:", err));
   }, []);
 
   const handleSave = async () => {
-    onClose();
+    try {
+      await axios.post(`${API_BASE}/ranks`, ranks);
+      onClose();
+    } catch (e) {
+      console.error("Failed to save ranks", e);
+      onClose();
+    }
+  };
+
+  const handleRankNameChange = (index: number, newName: string) => {
+    const updated = [...ranks];
+    updated[index].name = newName;
+    setRanks(updated);
+  };
+
+  const handleRankPriceChange = (index: number, newPrice: number) => {
+    const updated = [...ranks];
+    updated[index].price = newPrice;
+    setRanks(updated);
+  };
+
+  const addRank = () => {
+    setRanks([...ranks, { name: '新規プラン', price: 0 }]);
+  };
+
+  const removeRank = (index: number) => {
+    const updated = [...ranks];
+    updated.splice(index, 1);
+    setRanks(updated);
   };
 
   return (
@@ -70,26 +114,79 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         {/* Guardrails (Min/Max Price) Settings */}
         <div>
           <div className="flex items-center justify-between border-b pb-2 mb-4">
-            <h3 className="font-bold text-gray-700">2. 価格変動リミッター（ガードレール）</h3>
+            <h3 className="font-bold text-gray-700">2. 自社プラン・価格ガードレール設定</h3>
             <span className="bg-red-100 text-red-800 text-[10px] px-2 py-1 rounded font-bold">必須設定</span>
           </div>
           <p className="text-sm text-gray-600 mb-4">
-            AIが極端な値下げや非現実的な値上げを提案しないよう、自社ホテルの価格の「下限」と「上限」を設定します。AIの提案は必ずこの範囲内に収まります。
+            AIが極端な値下げや非現実的な値上げを提案しないよう、自社ホテルの価格の「下限」と「上限」を設定します。また、料金ランクごとのしきい値を設定することで、自社に最適な価格提案を受けられます。
           </p>
-          <div className="flex space-x-4">
+          <div className="flex space-x-4 mb-4">
             <div className="flex-1">
-              <label htmlFor="min_price" className="block text-xs font-bold text-gray-500 mb-1">最低販売価格（これ以上は下げない）</label>
+              <label htmlFor="min_price" className="block text-xs font-bold text-gray-500 mb-1">最低販売価格（下限）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="min_price" type="number" defaultValue="5000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="min_price" type="number" defaultValue={facility?.min_price || 5000} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
               </div>
             </div>
             <div className="flex-1">
-              <label htmlFor="max_price" className="block text-xs font-bold text-gray-500 mb-1">最高販売価格（これ以上は上げない）</label>
+              <label htmlFor="max_price" className="block text-xs font-bold text-gray-500 mb-1">最高販売価格（上限）</label>
               <div className="relative">
                 <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="max_price" type="number" defaultValue="30000" className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+                <input id="max_price" type="number" defaultValue={facility?.max_price || 30000} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
               </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded border mt-4">
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="text-sm font-bold text-gray-700">料金ランク（プラン）しきい値設定</h4>
+              <button
+                onClick={addRank}
+                className="bg-blue-100 text-blue-700 text-xs px-3 py-1 rounded font-bold hover:bg-blue-200 transition-colors"
+              >
+                + ランクを追加
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {ranks.map((rank, index) => (
+                <div key={index} className="flex items-center space-x-3 bg-white p-3 rounded border">
+                  <div className="flex-1">
+                    <label htmlFor={`rank_name_${index}`} className="sr-only">ランク名</label>
+                    <input
+                      id={`rank_name_${index}`}
+                      type="text"
+                      value={rank.name}
+                      onChange={(e) => handleRankNameChange(index, e.target.value)}
+                      className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                      placeholder="ランク A"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label htmlFor={`rank_price_${index}`} className="sr-only">しきい値価格</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-gray-500">¥</span>
+                      <input
+                        id={`rank_price_${index}`}
+                        type="number"
+                        value={rank.price}
+                        onChange={(e) => handleRankPriceChange(index, parseInt(e.target.value) || 0)}
+                        className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeRank(index)}
+                    aria-label="このランクを削除"
+                    className="text-gray-400 hover:text-red-500 transition-colors p-2"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              ))}
+              {ranks.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">料金ランクが設定されていません。</p>
+              )}
             </div>
           </div>
         </div>

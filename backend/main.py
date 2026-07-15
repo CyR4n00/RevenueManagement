@@ -26,6 +26,13 @@ async def lifespan(app: FastAPI):
         db.add(models.DBFacility(id=1, name="自社ホテル（サンプル）", base_price=10000))
         db.commit()
 
+    if not db.query(models.DBPriceRank).first():
+        db.add(models.DBPriceRank(name="ランク A (高需要時)", price=20000))
+        db.add(models.DBPriceRank(name="ランク B (やや高需要)", price=15000))
+        db.add(models.DBPriceRank(name="ランク C (通常)", price=10000))
+        db.add(models.DBPriceRank(name="ランク D (閑散期)", price=8000))
+        db.commit()
+
     # Start the background scheduler
     start_scheduler()
     yield
@@ -117,6 +124,19 @@ def set_config(key: str, payload: models.SystemConfig, db: Session = Depends(get
 def get_facility(db: Session = Depends(get_db)):
     return db.query(models.DBFacility).first()
 
+@app.get("/ranks", response_model=List[models.PriceRank])
+def get_ranks(db: Session = Depends(get_db)):
+    return db.query(models.DBPriceRank).order_by(models.DBPriceRank.price.desc()).all()
+
+@app.post("/ranks", response_model=List[models.PriceRank])
+def set_ranks(ranks: List[models.PriceRank], db: Session = Depends(get_db)):
+    db.query(models.DBPriceRank).delete()
+    db.commit()
+    for rank in ranks:
+        db.add(models.DBPriceRank(name=rank.name, price=rank.price))
+    db.commit()
+    return db.query(models.DBPriceRank).order_by(models.DBPriceRank.price.desc()).all()
+
 @app.get("/competitors", response_model=List[models.Competitor])
 def get_competitors(db: Session = Depends(get_db)):
     return db.query(models.DBCompetitor).all()
@@ -193,16 +213,23 @@ def get_alerts(start_date: str, days: int = 7, db: Session = Depends(get_db)):
 
     return alerts
 
-def price_to_rank(price: int) -> str:
-    if price >= 20000: return "A"
-    if price >= 15000: return "B"
-    if price >= 10000: return "C"
-    return "D"
+def price_to_rank(price: int, ranks: List[models.DBPriceRank]) -> str:
+    if not ranks:
+        return "未設定"
 
+    # Ranks should already be sorted descending, but just in case
+    sorted_ranks = sorted(ranks, key=lambda r: r.price, reverse=True)
+    for r in sorted_ranks:
+        if price >= r.price:
+            return r.name
+
+    # If it's below the lowest rank, return the lowest rank
+    return sorted_ranks[-1].name
 @app.get("/recommendation", response_model=models.MarketRecommendation)
 def get_recommendation(date: str, db: Session = Depends(get_db)):
     comp_data = get_market_data(start_date=date, days=1, db=db)
     facility = get_facility(db)
+    ranks = db.query(models.DBPriceRank).order_by(models.DBPriceRank.price.desc()).all()
 
     if not facility:
         return models.MarketRecommendation(
@@ -219,19 +246,27 @@ def get_recommendation(date: str, db: Session = Depends(get_db)):
          return models.MarketRecommendation(
             date=date,
             suggested_price=suggested,
-            suggested_rank=price_to_rank(suggested),
+            suggested_rank=price_to_rank(suggested, ranks),
             reasoning="ベンチマーク施設がすべて満室です。強気の価格設定を推奨しますが、上限・下限設定（ガードレール）の範囲内に調整しました。"
         )
 
     avg_comp_price = sum(c.price_today for c in available_comps) / len(available_comps)
 
     major_increases = [c for c in available_comps if c.difference >= 3000]
+    major_decreases = [c for c in available_comps if c.difference <= -3000]
 
     if major_increases:
         raw_suggested = int(avg_comp_price * 0.95)
         suggested = min(max(raw_suggested, facility.min_price), facility.max_price)
         names = "、".join([c.competitor_name for c in major_increases])
         reasoning = f"{names} が大幅に値上げしています。市場平均に合わせて上限・下限の範囲内で価格を引き上げることを推奨します。"
+    elif major_decreases:
+        # Conservative downward pricing: don't match the drop fully, just a slight adjustment
+        raw_suggested = int(facility.base_price * 0.90)
+        # Ensure we don't drop below min_price
+        suggested = max(raw_suggested, facility.min_price)
+        names = "、".join([c.competitor_name for c in major_decreases])
+        reasoning = f"{names} が大幅に値下げしています。価格競争を避けるため、急激な値下げは行わず、自社の下限価格（ガードレール）の範囲内で小幅な調整にとどめることを推奨します。"
     else:
         suggested = int(facility.base_price)
         suggested = min(max(suggested, facility.min_price), facility.max_price)
@@ -242,7 +277,7 @@ def get_recommendation(date: str, db: Session = Depends(get_db)):
     return models.MarketRecommendation(
         date=date,
         suggested_price=suggested,
-        suggested_rank=price_to_rank(suggested),
+        suggested_rank=price_to_rank(suggested, facility),
         reasoning=reasoning
     )
 

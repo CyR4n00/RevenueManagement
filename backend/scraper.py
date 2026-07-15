@@ -42,15 +42,15 @@ class OTAScraper:
                     "checkIn": target_date
                 }
 
-                # We comment out the real call to avoid using actual credits during tests,
-                # but this is how it would be structured in production
-                # run = client.actor("apify/booking-scraper").call(run_input=run_input)
-                # results = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-                # if results and len(results) > 0:
-                #     price = results[0].get('price')
-                #     return int(price), False
-
-                print(f"[Scraper] Apify integration called for {url}")
+                print(f"[Scraper] Calling Apify integration for {url}")
+                # Real call to Apify actor (e.g. apify/booking-scraper)
+                run = client.actor("apify/booking-scraper").call(run_input=run_input)
+                if run:
+                    results = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+                    if results and len(results) > 0:
+                        price = results[0].get('price')
+                        if price:
+                           return int(price), False
             except Exception as e:
                 print(f"[Scraper] Apify call failed: {e}")
 

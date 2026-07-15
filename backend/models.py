@@ -19,6 +19,12 @@ class DBFacility(Base):
     min_price = Column(Integer, default=5000)
     max_price = Column(Integer, default=30000)
 
+class DBPriceRank(Base):
+    __tablename__ = "price_ranks"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    price = Column(Integer)
+
 class DBCompetitor(Base):
     __tablename__ = "competitors"
     id = Column(Integer, primary_key=True, index=True)
@@ -49,6 +55,12 @@ class Facility(BaseModel):
     base_price: int
     min_price: int = 5000
     max_price: int = 30000
+    model_config = ConfigDict(from_attributes=True)
+
+class PriceRank(BaseModel):
+    id: Optional[int] = None
+    name: str
+    price: int
     model_config = ConfigDict(from_attributes=True)
 
 class Competitor(BaseModel):

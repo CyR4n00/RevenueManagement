@@ -145,13 +145,18 @@ function App() {
                      <p className="mt-4 text-blue-200">データ分析中...</p>
                    )}
                 </div>
-                <button
-                  aria-label="サイトコントローラー用CSVをダウンロード"
-                  onClick={handleDownloadCsv}
-                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-300 focus-visible:outline-none"
-                >
-                  📥 サイトコントローラー用CSVをダウンロード
-                </button>
+                <div className="mt-6 group relative">
+                  <button
+                    aria-label="サイトコントローラー用CSVをダウンロード（将来実装予定）"
+                    disabled
+                    className="w-full bg-blue-400 bg-opacity-50 text-blue-100 font-bold py-2 rounded shadow-none cursor-not-allowed text-sm"
+                  >
+                    ⏳ PMS自動連携用CSV（準備中）
+                  </button>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-2 w-full bg-gray-800 text-xs text-white p-2 rounded shadow-lg pointer-events-none text-center">
+                    現在、手動での判断を優先していただくため、PMSへの自動反映CSV出力機能は次期アップデートでの提供を予定しています。
+                  </div>
+                </div>
               </div>
 
               {/* Alerts Panel */}
