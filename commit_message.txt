@@ -1,0 +1,7 @@
+feat: implement live Stripe checkout and webhook integration
+
+- Replaced API mock with real Stripe `checkout.Session.create` in `/create-checkout-session`.
+- Dynamically creates a standard `Product` and `Price` ("レベニューアシスタント 月額プラン") in the connected Stripe account if they do not exist, ensuring a zero-config setup for the initial run.
+- Added `/webhook` endpoint to listen for `checkout.session.completed` events and automatically activate the associated `DBUser` subscription.
+- Updated `App.tsx` to read the `?success=true` query param upon redirect from Stripe checkout and automatically log the user into the dashboard.
+- Configured real Stripe API Keys into environment variables.

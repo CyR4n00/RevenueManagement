@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
+import { Login } from './Login';
 
 interface Competitor {
   id: number;
@@ -35,6 +36,17 @@ interface Recommendation {
 const API_BASE = 'http://localhost:8000';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    // Check if returning from a successful Stripe checkout
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === 'true') {
+      setIsAuthenticated(true);
+      // Clean up the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
@@ -83,6 +95,10 @@ function App() {
 
   // Group market data by competitor for the Tower view
   const comps = Array.from(new Set(marketData.map(m => m.competitor_name)));
+
+  if (!isAuthenticated) {
+    return <Login onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-800">

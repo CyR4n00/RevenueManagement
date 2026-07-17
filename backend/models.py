@@ -11,6 +11,13 @@ class DBSystemConfig(Base):
     key = Column(String, primary_key=True, index=True)
     value = Column(String)
 
+class DBUser(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    stripe_customer_id = Column(String, unique=True, index=True, nullable=True)
+    subscription_status = Column(String, default="inactive") # e.g. "active", "past_due"
+
 class DBFacility(Base):
     __tablename__ = "facilities"
     id = Column(Integer, primary_key=True, index=True)

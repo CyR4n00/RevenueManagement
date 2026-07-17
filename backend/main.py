@@ -1,6 +1,13 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+import stripe
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 import io
@@ -98,7 +105,101 @@ def run_scraper(db: Session, date_str: str):
     db.commit()
 
 
+@app.post("/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    event = None
+
+    if not endpoint_secret:
+        raise HTTPException(status_code=400, detail="Webhook secret not configured")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, endpoint_secret
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError as e:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        customer_email = session.get('customer_details', {}).get('email')
+
+        if customer_email:
+            user = db.query(models.DBUser).filter(models.DBUser.email == customer_email).first()
+            if user:
+                user.subscription_status = 'active'
+                user.stripe_customer_id = session.get('customer')
+                db.commit()
+                print(f"[Webhook] Activated subscription for {customer_email}")
+
+    return {"status": "success"}
+
 # --- ENDPOINTS ---
+
+@app.post("/create-checkout-session")
+async def create_checkout_session(request: Request, db: Session = Depends(get_db)):
+    try:
+        data = await request.json()
+        email = data.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
+
+        # Check if user already exists
+        user = db.query(models.DBUser).filter(models.DBUser.email == email).first()
+        if not user:
+            user = models.DBUser(email=email)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        # Dynamically create or retrieve a Product and Price to make this zero-config for the user
+        prices = stripe.Price.list(limit=1, lookup_keys=["revenue_assistant_monthly"])
+
+        if not prices.data:
+            # Create a test product and price
+            product = stripe.Product.create(
+                name="レベニューアシスタント 月額プラン",
+                description="競合の価格・空室状況を自動監視し、最適な価格提案を行うアシスタントツールです。"
+            )
+            price = stripe.Price.create(
+                product=product.id,
+                unit_amount=9800, # e.g. 9800 JPY
+                currency="jpy",
+                recurring={"interval": "month"},
+                lookup_key="revenue_assistant_monthly"
+            )
+            price_id = price.id
+        else:
+            price_id = prices.data[0].id
+
+        # Create Stripe Checkout Session
+        checkout_session = stripe.checkout.Session.create(
+            customer_email=email,
+            payment_method_types=['card'],
+            line_items=[
+                {
+                    'price': price_id,
+                    'quantity': 1,
+                },
+            ],
+            mode='subscription',
+            success_url='http://localhost:3000/?success=true&session_id={CHECKOUT_SESSION_ID}',
+            cancel_url='http://localhost:3000/',
+        )
+
+        return {"url": checkout_session.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/config", response_model=List[models.SystemConfig])
+def get_configs(db: Session = Depends(get_db)):
+    return db.query(models.DBSystemConfig).all()
 
 @app.get("/config/{key}", response_model=models.SystemConfig)
 def get_config(key: str, db: Session = Depends(get_db)):
@@ -106,6 +207,18 @@ def get_config(key: str, db: Session = Depends(get_db)):
     if not config:
         # Return empty string if not found
         return models.SystemConfig(key=key, value="")
+    return config
+
+@app.post("/config", response_model=models.SystemConfig)
+def set_config_body(payload: models.SystemConfig, db: Session = Depends(get_db)):
+    config = db.query(models.DBSystemConfig).filter(models.DBSystemConfig.key == payload.key).first()
+    if not config:
+        config = models.DBSystemConfig(key=payload.key, value=payload.value)
+        db.add(config)
+    else:
+        config.value = payload.value
+    db.commit()
+    db.refresh(config)
     return config
 
 @app.post("/config/{key}", response_model=models.SystemConfig)
@@ -124,6 +237,24 @@ def set_config(key: str, payload: models.SystemConfig, db: Session = Depends(get
 def get_facility(db: Session = Depends(get_db)):
     return db.query(models.DBFacility).first()
 
+@app.post("/facility", response_model=models.Facility)
+def update_facility(facility: models.Facility, db: Session = Depends(get_db)):
+    db_fac = db.query(models.DBFacility).filter(models.DBFacility.id == facility.id).first()
+    if db_fac:
+        db_fac.min_price = facility.min_price
+        db_fac.max_price = facility.max_price
+        db_fac.name = facility.name
+        db_fac.base_price = facility.base_price
+        db.commit()
+        db.refresh(db_fac)
+        return db_fac
+    else:
+        new_fac = models.DBFacility(id=facility.id, name=facility.name, base_price=facility.base_price, min_price=facility.min_price, max_price=facility.max_price)
+        db.add(new_fac)
+        db.commit()
+        db.refresh(new_fac)
+        return new_fac
+
 @app.get("/ranks", response_model=List[models.PriceRank])
 def get_ranks(db: Session = Depends(get_db)):
     return db.query(models.DBPriceRank).order_by(models.DBPriceRank.price.desc()).all()
@@ -139,6 +270,15 @@ def set_ranks(ranks: List[models.PriceRank], db: Session = Depends(get_db)):
 
 @app.get("/competitors", response_model=List[models.Competitor])
 def get_competitors(db: Session = Depends(get_db)):
+    return db.query(models.DBCompetitor).all()
+
+@app.post("/competitors", response_model=List[models.Competitor])
+def set_competitors(competitors: List[models.Competitor], db: Session = Depends(get_db)):
+    db.query(models.DBCompetitor).delete()
+    db.commit()
+    for comp in competitors:
+        db.add(models.DBCompetitor(name=comp.name, url=comp.url))
+    db.commit()
     return db.query(models.DBCompetitor).all()
 
 @app.get("/market_data", response_model=List[models.CompetitorPrice])
@@ -277,7 +417,7 @@ def get_recommendation(date: str, db: Session = Depends(get_db)):
     return models.MarketRecommendation(
         date=date,
         suggested_price=suggested,
-        suggested_rank=price_to_rank(suggested, facility),
+        suggested_rank=price_to_rank(suggested, ranks),
         reasoning=reasoning
     )
 

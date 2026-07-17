@@ -3,9 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "pnpm": {
-    "ignoredBuiltDependencies": ["core-js", "core-js-pure"]
+    "ignoredBuiltDependencies": [
+      "core-js",
+      "core-js-pure"
+    ]
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.7.0",
+    "@stripe/stripe-js": "^9.10.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

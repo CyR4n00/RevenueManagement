@@ -3,6 +3,9 @@ import { test, expect } from '@playwright/test';
 test('Revenue Assistant - Competitor Dashboard Verification', async ({ page }) => {
   await page.goto('http://localhost:3000');
 
+  // Bypass login screen
+  await page.click('button:has-text("[開発用] 決済をスキップしてログイン")');
+
   // Wait for the app to load and Revenue Tower to be visible
   await page.waitForSelector('text=レベニューカレンダー');
   await page.waitForTimeout(1000); // Wait for data to render
