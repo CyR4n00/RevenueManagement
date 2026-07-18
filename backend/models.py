@@ -110,6 +110,14 @@ class IntegrationStatus(BaseModel):
     line_messaging_configured: bool
     stripe_configured: bool
     simulation_enabled: bool
+    ota_sources: list["OtaSourceStatus"]
+
+
+class OtaSourceStatus(BaseModel):
+    key: str
+    name: str
+    status: Literal["pending", "approved", "disabled"]
+    actor_configured: bool
 
 
 class PmsProfile(BaseModel):

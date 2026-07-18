@@ -44,7 +44,10 @@ class OTAScraper:
 
     def _from_apify(self, url: str, target_date: str) -> ScrapeResult:
         token = self.settings.apify_api_token
-        actor_id = self.settings.actor_for_url(url)
+        ota_source = self.settings.source_for_url(url)
+        if not ota_source or ota_source.status != "approved":
+            raise DataCollectionError("OTA collection is not approved for this source")
+        actor_id = ota_source.actor_id
         if not token or not actor_id:
             raise DataCollectionError("Apify token or OTA actor is not configured")
 

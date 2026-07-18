@@ -14,6 +14,22 @@ def _bool(name: str, default: bool) -> bool:
     return default if value is None else value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _ota_status(name: str) -> str:
+    status = os.getenv(name, "pending").strip().lower()
+    if status not in {"pending", "approved", "disabled"}:
+        raise RuntimeError(f"{name} must be pending, approved, or disabled")
+    return status
+
+
+@dataclass(frozen=True)
+class OtaSourceRuntime:
+    key: str
+    name: str
+    domains: tuple[str, ...]
+    status: str
+    actor_id: str
+
+
 @dataclass(frozen=True)
 class Settings:
     environment: str
@@ -24,6 +40,10 @@ class Settings:
     apify_actor_airbnb: str
     apify_actor_jalan: str
     apify_actor_rakuten: str
+    ota_status_booking: str
+    ota_status_airbnb: str
+    ota_status_jalan: str
+    ota_status_rakuten: str
     allow_simulated_data: bool
     line_channel_access_token: str
     line_user_id: str
@@ -36,17 +56,25 @@ class Settings:
     daily_sync_hour: int
     daily_sync_minute: int
 
-    def actor_for_url(self, url: str) -> str:
+    def source_for_url(self, url: str) -> OtaSourceRuntime | None:
         host = url.lower()
         if "booking.com" in host:
-            return self.apify_actor_booking
+            return OtaSourceRuntime("booking", "Booking.com", ("booking.com",), self.ota_status_booking, self.apify_actor_booking)
         if "airbnb." in host:
-            return self.apify_actor_airbnb
+            return OtaSourceRuntime("airbnb", "Airbnb", ("airbnb.com",), self.ota_status_airbnb, self.apify_actor_airbnb)
         if "jalan.net" in host:
-            return self.apify_actor_jalan
+            return OtaSourceRuntime("jalan", "じゃらんnet", ("jalan.net",), self.ota_status_jalan, self.apify_actor_jalan)
         if "rakuten.co.jp" in host:
-            return self.apify_actor_rakuten
-        return ""
+            return OtaSourceRuntime("rakuten", "楽天トラベル", ("travel.rakuten.co.jp",), self.ota_status_rakuten, self.apify_actor_rakuten)
+        return None
+
+    def ota_sources(self) -> tuple[OtaSourceRuntime, ...]:
+        return (
+            OtaSourceRuntime("booking", "Booking.com", ("booking.com",), self.ota_status_booking, self.apify_actor_booking),
+            OtaSourceRuntime("airbnb", "Airbnb", ("airbnb.com",), self.ota_status_airbnb, self.apify_actor_airbnb),
+            OtaSourceRuntime("jalan", "じゃらんnet", ("jalan.net",), self.ota_status_jalan, self.apify_actor_jalan),
+            OtaSourceRuntime("rakuten", "楽天トラベル", ("travel.rakuten.co.jp",), self.ota_status_rakuten, self.apify_actor_rakuten),
+        )
 
 
 @lru_cache
@@ -64,6 +92,10 @@ def get_settings() -> Settings:
         apify_actor_airbnb=os.getenv("APIFY_ACTOR_AIRBNB", ""),
         apify_actor_jalan=os.getenv("APIFY_ACTOR_JALAN", ""),
         apify_actor_rakuten=os.getenv("APIFY_ACTOR_RAKUTEN", ""),
+        ota_status_booking=_ota_status("OTA_STATUS_BOOKING"),
+        ota_status_airbnb=_ota_status("OTA_STATUS_AIRBNB"),
+        ota_status_jalan=_ota_status("OTA_STATUS_JALAN"),
+        ota_status_rakuten=_ota_status("OTA_STATUS_RAKUTEN"),
         allow_simulated_data=_bool("ALLOW_SIMULATED_DATA", environment == "demo"),
         line_channel_access_token=os.getenv("LINE_CHANNEL_ACCESS_TOKEN", ""),
         line_user_id=os.getenv("LINE_USER_ID", ""),

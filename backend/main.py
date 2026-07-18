@@ -216,13 +216,22 @@ def health():
 
 @app.get("/integrations/status", response_model=models.IntegrationStatus)
 def integration_status():
-    actors = (settings.apify_actor_booking, settings.apify_actor_airbnb, settings.apify_actor_jalan, settings.apify_actor_rakuten)
+    ota_sources = [
+        models.OtaSourceStatus(
+            key=source.key,
+            name=source.name,
+            status=source.status,
+            actor_configured=bool(settings.apify_api_token and source.actor_id),
+        )
+        for source in settings.ota_sources()
+    ]
     return models.IntegrationStatus(
         environment=settings.environment,
-        apify_configured=bool(settings.apify_api_token and any(actors)),
+        apify_configured=any(source.actor_configured and source.status == "approved" for source in ota_sources),
         line_messaging_configured=bool(settings.line_channel_access_token and settings.line_user_id),
         stripe_configured=stripe_billing.configured,
         simulation_enabled=settings.allow_simulated_data,
+        ota_sources=ota_sources,
     )
 
 
