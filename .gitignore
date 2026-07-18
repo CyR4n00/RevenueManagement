@@ -12,3 +12,6 @@ playwright-report/
 blob-report/
 playwright/.cache/
 backend/revenue_assistant.db
+backend/.env
+frontend/.env
+backend/.pytest_cache/

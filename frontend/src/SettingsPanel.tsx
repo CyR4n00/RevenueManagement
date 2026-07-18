@@ -1,212 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+interface Competitor { id: number; name: string; url: string; }
+interface Facility { min_price: number; max_price: number; }
+interface IntegrationStatus { environment: 'demo' | 'production'; apify_configured: boolean; line_messaging_configured: boolean; stripe_configured: boolean; simulation_enabled: boolean; }
 
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const [apifyApiKey, setApifyApiKey] = useState('');
-  const [competitors, setCompetitors] = useState<any[]>([]);
-  const [facility, setFacility] = useState<any>({ min_price: 5000, max_price: 30000 });
+export function SettingsPanel({ apiBase, onClose }: { apiBase: string; onClose: () => void }) {
+  const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  const [facility, setFacility] = useState<Facility>({ min_price: 5000, max_price: 30000 });
+  const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
+  const [adminKey, setAdminKey] = useState(sessionStorage.getItem('revenue-admin-key') || '');
+  const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    const fetchSettingsData = async () => {
-      try {
-        const results = await Promise.allSettled([
-          axios.get(`${API_BASE}/config/APIFY_API_KEY`),
-          axios.get(`${API_BASE}/competitors`),
-          axios.get(`${API_BASE}/facility`)
-        ]);
+  useEffect(() => { (async () => { try { const [competitorData, facilityData, integrationData] = await Promise.all([axios.get<Competitor[]>(`${apiBase}/competitors`), axios.get<Facility>(`${apiBase}/facility`), axios.get<IntegrationStatus>(`${apiBase}/integrations/status`)]); setCompetitors(competitorData.data); setFacility(facilityData.data); setIntegration(integrationData.data); } catch { setMessage('設定情報を読み込めませんでした。'); } })(); }, [apiBase]);
 
-        if (results[0].status === 'fulfilled' && results[0].value.data && results[0].value.data.value) setApifyApiKey(results[0].value.data.value);
-        if (results[1].status === 'fulfilled' && results[1].value.data) setCompetitors(results[1].value.data);
-        if (results[2].status === 'fulfilled' && results[2].value.data) setFacility(results[2].value.data);
-      } catch (err) {
-        console.error("Failed to load settings data:", err);
-      }
-    };
-    fetchSettingsData();
-  }, []);
-
-  const handleSave = async () => {
+  const save = async () => {
+    if (facility.min_price > facility.max_price) { setMessage('最低価格は最高価格以下にしてください。'); return; }
     try {
-      await axios.post(`${API_BASE}/config/APIFY_API_KEY`, { key: 'APIFY_API_KEY', value: apifyApiKey });
-
-      const compUpdates = competitors.map(comp =>
-        axios.put(`${API_BASE}/competitors/${comp.id}`, { name: comp.name, url: comp.url })
-      );
-      await Promise.all(compUpdates);
-
-      await axios.put(`${API_BASE}/facility`, {
-        min_price: facility.min_price,
-        max_price: facility.max_price
-      });
-
+      sessionStorage.setItem('revenue-admin-key', adminKey);
+      const headers = adminKey ? { 'X-Admin-Key': adminKey } : {};
+      await Promise.all([axios.put(`${apiBase}/facility`, facility, { headers }), ...competitors.map(item => axios.put(`${apiBase}/competitors/${item.id}`, { name: item.name, url: item.url }, { headers }))]);
       onClose();
-    } catch (err) {
-      console.error("Failed to save settings data:", err);
-      // Even if it fails, close the panel for now
-      onClose();
-    }
+    } catch (error: any) { setMessage(error?.response?.status === 401 ? '管理キーが正しくありません。' : '保存に失敗しました。OTA URLとサーバー設定を確認してください。'); }
   };
 
-  const handleCompetitorChange = (id: number, field: string, value: string) => {
-    setCompetitors(comps => comps.map(c => c.id === id ? { ...c, [field]: value } : c));
+  const startCheckout = async () => {
+    try {
+      const headers = adminKey ? { 'X-Admin-Key': adminKey } : {};
+      const response = await axios.post<{ checkout_url: string }>(`${apiBase}/billing/checkout`, {}, { headers });
+      window.location.assign(response.data.checkout_url);
+    } catch { setMessage('Stripe Checkoutを開始できませんでした。STRIPE_SECRET_KEY、STRIPE_WEBHOOK_SECRET、STRIPE_PRICE_ID_PROを確認してください。'); }
   };
 
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 mb-8">
-      <div className="bg-gray-50 border-b p-4 flex justify-between items-center">
-        <div>
-          <h2 className="font-bold text-lg text-gray-800">⚙️ アシスタント設定 (ベンチマーク・通知)</h2>
-          <p className="text-xs text-gray-500 mt-1">AIが毎日監視する競合施設と、アラートの通知先を設定します。</p>
-        </div>
-        <button aria-label="閉じる" onClick={onClose} className="text-gray-500 hover:text-gray-800 font-bold text-xl focus-visible:ring-2 focus-visible:outline-none rounded">&times;</button>
-      </div>
-
-      <div className="p-6 space-y-8">
-        {/* API Settings */}
-        <div>
-          <div className="flex items-center justify-between border-b pb-2 mb-4">
-            <h3 className="font-bold text-gray-700">0. API連携設定</h3>
-            <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded font-bold">推奨機能</span>
-          </div>
-          <p className="text-sm text-gray-600 mb-4">
-            高精度な競合データ収集のために、ApifyのAPIキーを設定してください。未設定の場合は簡易的な収集が試行されます。
-          </p>
-          <div>
-            <label htmlFor="apify-api-key" className="block text-xs font-bold text-gray-500 mb-1">Apify API Key</label>
-            <input
-              id="apify-api-key"
-              type="password"
-              value={apifyApiKey}
-              onChange={(e) => setApifyApiKey(e.target.value)}
-              placeholder="apify_api_..."
-              className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none"
-            />
-          </div>
-        </div>
-
-        {/* Competitor Settings */}
-        <div>
-          <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">1. ベンチマーク（競合）登録</h3>
-          <div className="space-y-4">
-            {competitors.map((comp, index) => (
-              <div key={comp.id} className="border rounded-lg p-4 bg-gray-50 flex flex-col md:flex-row items-start md:items-center space-y-3 md:space-y-0 md:space-x-4">
-                 <div className="bg-blue-100 text-blue-800 font-bold w-8 h-8 rounded-full flex items-center justify-center shrink-0">
-                   {index + 1}
-                 </div>
-                 <div className="flex-1 w-full">
-                   <label htmlFor={`comp-name-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">施設名 (表示用)</label>
-                   <input id={`comp-name-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" value={comp.name} onChange={(e) => handleCompetitorChange(comp.id, 'name', e.target.value)} />
-                 </div>
-                 <div className="flex-2 w-full md:w-1/2">
-                   <label htmlFor={`comp-url-${comp.id}`} className="block text-xs font-bold text-gray-500 mb-1">OTAのURL (楽天トラベル, Booking.com等)</label>
-                   <input id={`comp-url-${comp.id}`} type="text" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" value={comp.url} onChange={(e) => handleCompetitorChange(comp.id, 'url', e.target.value)} />
-                 </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 text-xs text-gray-500 flex items-start bg-gray-50 p-3 rounded border">
-            <span className="mr-2">ℹ️</span>
-            <p>※現在は直感的な把握を優先し「対象施設のその日の最安値（Best Available Rate）」を基準に比較します。将来のアップデートにて「部屋タイプ」や「食事有無」を指定した厳密なプラン比較が可能になる予定です。</p>
-          </div>
-        </div>
-
-        {/* Guardrails (Min/Max Price) Settings */}
-        <div>
-          <div className="flex items-center justify-between border-b pb-2 mb-4">
-            <h3 className="font-bold text-gray-700">2. 価格変動リミッター（ガードレール）</h3>
-            <span className="bg-red-100 text-red-800 text-[10px] px-2 py-1 rounded font-bold">必須設定</span>
-          </div>
-          <p className="text-sm text-gray-600 mb-4">
-            AIが極端な値下げや非現実的な値上げを提案しないよう、自社ホテルの価格の「下限」と「上限」を設定します。AIの提案は必ずこの範囲内に収まります。
-          </p>
-          <div className="flex space-x-4">
-            <div className="flex-1">
-              <label htmlFor="min_price" className="block text-xs font-bold text-gray-500 mb-1">最低販売価格（これ以上は下げない）</label>
-              <div className="relative">
-                <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="min_price" type="number" value={facility.min_price} onChange={(e) => setFacility({ ...facility, min_price: parseInt(e.target.value) || 0 })} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-            </div>
-            <div className="flex-1">
-              <label htmlFor="max_price" className="block text-xs font-bold text-gray-500 mb-1">最高販売価格（これ以上は上げない）</label>
-              <div className="relative">
-                <span className="absolute left-3 top-2 text-gray-500">¥</span>
-                <input id="max_price" type="number" value={facility.max_price} onChange={(e) => setFacility({ ...facility, max_price: parseInt(e.target.value) || 0 })} className="w-full pl-8 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Notifications Settings */}
-        <div>
-          <div className="flex items-center justify-between border-b pb-2 mb-4">
-            <h3 className="font-bold text-gray-700">3. 変動アラートの外部通知設定</h3>
-            <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded font-bold">推奨機能</span>
-          </div>
-          <p className="text-sm text-gray-600 mb-4">
-            競合施設が大きな値上げ・値下げを行った際や満室になった際に、即座に通知を受け取ることができます。<br/>
-            <span className="text-red-500 font-semibold text-xs">※毎日のPC確認が不要になるため、LINE連携を強く推奨します。</span>
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-            <div className="border p-4 rounded-lg bg-green-50 border-green-200">
-               <h4 className="font-bold text-green-700 flex items-center mb-3">
-                 <span className="mr-2">💬</span> LINE通知連携
-               </h4>
-               <label htmlFor="notify-line" className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
-                 <input id="notify-line" type="checkbox" defaultChecked={true} className="rounded text-green-600 focus:ring-green-500" />
-                 <span>LINEで通知を受け取る</span>
-               </label>
-               <button className="w-full bg-[#06C755] text-white font-bold py-2 rounded shadow hover:bg-green-600 transition-colors text-sm mt-2 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500 focus-visible:outline-none">
-                 LINEアカウントと連携する
-               </button>
-            </div>
-
-            <div className="border p-4 rounded-lg bg-gray-50">
-               <h4 className="font-bold text-gray-700 flex items-center mb-3">
-                 <span className="mr-2">📧</span> メール通知
-               </h4>
-               <label htmlFor="notify-email" className="flex items-center space-x-2 text-sm text-gray-700 mb-2">
-                 <input id="notify-email" type="checkbox" defaultChecked={false} className="rounded text-blue-600 focus:ring-blue-500" />
-                 <span>メールで通知を受け取る</span>
-               </label>
-               <label htmlFor="email-input" className="sr-only">メールアドレス</label>
-               <input id="email-input" type="email" placeholder="example@hotel.com" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none mt-1" />
-            </div>
-          </div>
-
-          {/* Advanced Notification Filters */}
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-             <h4 className="text-sm font-bold text-gray-700 mb-3">通知の頻度と条件（スパム防止）</h4>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div>
-                 <label htmlFor="threshold-select" className="block text-xs font-bold text-gray-500 mb-1">通知を送る「価格変動」のしきい値</label>
-                 <select id="threshold-select" defaultValue="3000" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
-                   <option value="1000">1,000円以上の変動で通知</option>
-                   <option value="3000">3,000円以上の変動で通知 (推奨)</option>
-                   <option value="5000">5,000円以上の変動で通知</option>
-                 </select>
-               </div>
-               <div>
-                 <label htmlFor="timing-select" className="block text-xs font-bold text-gray-500 mb-1">通知のタイミング</label>
-                 <select id="timing-select" defaultValue="morning" className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-white">
-                   <option value="immediate">変動を検知したら即時</option>
-                   <option value="morning">1日1回 朝10時にまとめて通知 (推奨)</option>
-                   <option value="evening">1日1回 夕方17時にまとめて通知</option>
-                 </select>
-               </div>
-             </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end pt-4 border-t">
-          <button onClick={handleSave} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none">
-            設定を保存して戻る
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return <section className="rounded-xl border bg-white p-6 shadow-sm"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-bold">運用設定</h2><p className="mt-1 text-sm text-slate-500">秘密情報は画面に保存せず、サーバー環境変数で管理します。</p></div><button onClick={onClose} aria-label="設定を閉じる" className="text-xl">×</button></div>{message && <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-800">{message}</p>}
+    <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4"><Status title="環境" value={integration?.environment === 'production' ? '本番' : 'デモ'} ready={integration?.environment === 'production'} /><Status title="Apify" value={integration?.apify_configured ? '設定済み' : '未設定'} ready={integration?.apify_configured} /><Status title="LINE Messaging API" value={integration?.line_messaging_configured ? '設定済み' : '未設定'} ready={integration?.line_messaging_configured} /><Status title="Stripe" value={integration?.stripe_configured ? '設定済み' : '未設定'} ready={integration?.stripe_configured} /></div>
+    <label className="mt-6 block text-sm font-semibold">管理キー（本番のみ必須）<input type="password" value={adminKey} onChange={event => setAdminKey(event.target.value)} className="mt-1 block w-full rounded border p-2" autoComplete="off" /></label>
+    <div className="mt-6"><h3 className="font-semibold">競合施設</h3><div className="mt-3 space-y-3">{competitors.map((competitor, index) => <div key={competitor.id} className="grid gap-2 rounded border bg-slate-50 p-3 md:grid-cols-3"><label className="text-sm">名称<input value={competitor.name} onChange={event => setCompetitors(items => items.map(item => item.id === competitor.id ? { ...item, name: event.target.value } : item))} className="mt-1 w-full rounded border p-2" /></label><label className="text-sm md:col-span-2">OTA URL<input value={competitor.url} onChange={event => setCompetitors(items => items.map(item => item.id === competitor.id ? { ...item, url: event.target.value } : item))} className="mt-1 w-full rounded border p-2" /></label><span className="sr-only">競合 {index + 1}</span></div>)}</div></div>
+    <div className="mt-6"><h3 className="font-semibold">価格ガードレール</h3><div className="mt-3 grid gap-3 md:grid-cols-2"><label className="text-sm">最低価格（円）<input type="number" min="0" value={facility.min_price} onChange={event => setFacility({ ...facility, min_price: Number(event.target.value) })} className="mt-1 w-full rounded border p-2" /></label><label className="text-sm">最高価格（円）<input type="number" min="0" value={facility.max_price} onChange={event => setFacility({ ...facility, max_price: Number(event.target.value) })} className="mt-1 w-full rounded border p-2" /></label></div></div>
+    <p className="mt-6 rounded bg-slate-50 p-3 text-xs text-slate-600">Apifyトークン／Actor ID、LINE Channel Access Token／送信先User ID、Stripeの秘密鍵・Webhook Secret・Price IDはバックエンドの <code>.env</code> またはデプロイ先のシークレットに設定してください。LINE Notifyは使用しません。</p><div className="mt-6 flex flex-wrap justify-end gap-3"><button onClick={startCheckout} disabled={!integration?.stripe_configured} className="rounded border border-violet-600 px-5 py-2 font-semibold text-violet-700 disabled:cursor-not-allowed disabled:opacity-50">Stripeで契約を開始</button><button onClick={save} className="rounded bg-blue-600 px-5 py-2 font-semibold text-white">変更を保存</button></div>
+  </section>;
 }
+
+function Status({ title, value, ready }: { title: string; value: string; ready?: boolean }) { return <div className="rounded border p-3"><p className="text-xs text-slate-500">{title}</p><p className={ready ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700'}>{value}</p></div>; }

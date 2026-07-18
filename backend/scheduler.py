@@ -1,93 +1,59 @@
+"""Single-instance background market sync scheduler."""
+
+import datetime as dt
+import logging
+
 from apscheduler.schedulers.background import BackgroundScheduler
-import datetime
-from sqlalchemy.orm import Session
+
 from database import SessionLocal
-import models
-from scraper import scraper_service
 from notifier import notifier_service
+from settings import get_settings
+
+logger = logging.getLogger(__name__)
+_scheduler = BackgroundScheduler(timezone="Asia/Tokyo")
+
 
 def scheduled_scraping_job():
-    print(f"[{datetime.datetime.now()}] [Scheduler] Starting daily market data sync...")
-    db: Session = SessionLocal()
+    # Imported here to avoid a module cycle during FastAPI application creation.
+    from main import collect_market_data, create_alerts
 
-    try:
-        # 1. Scrape data for today and next 6 days (7 days total)
-        today = datetime.datetime.now().date()
-        competitors = db.query(models.DBCompetitor).all()
-
-        alerts_generated = []
-
-        for i in range(7):
-            target_date = today + datetime.timedelta(days=i)
-            date_str = target_date.strftime("%Y-%m-%d")
-            yesterday_str = (target_date - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-
-            for comp in competitors:
-                # Check if data already exists
-                existing = db.query(models.DBCompetitorPrice).filter(
-                    models.DBCompetitorPrice.competitor_id == comp.id,
-                    models.DBCompetitorPrice.date == date_str
-                ).first()
-
-                if not existing:
-                    price, is_booked = scraper_service.extract_price(comp.url, date_str, comp.id)
-                    db.add(models.DBCompetitorPrice(
-                        date=date_str,
-                        competitor_id=comp.id,
-                        price=price,
-                        is_fully_booked=is_booked,
-                        scraped_at=datetime.datetime.now().isoformat()
-                    ))
-
-                    # Ensure yesterday's data exists for comparison
-                    yesterday_data = db.query(models.DBCompetitorPrice).filter(
-                        models.DBCompetitorPrice.competitor_id == comp.id,
-                        models.DBCompetitorPrice.date == yesterday_str
-                    ).first()
-
-                    if not yesterday_data:
-                         y_price, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id)
-                         db.add(models.DBCompetitorPrice(
-                            date=yesterday_str,
-                            competitor_id=comp.id,
-                            price=y_price,
-                            is_fully_booked=False,
-                            scraped_at=datetime.datetime.now().isoformat()
-                        ))
-                         yesterday_data = models.DBCompetitorPrice(price=y_price)
-
-                    # 2. Check for alert conditions (Hardcoded > 3000 JPY or sellout for now)
-                    diff = price - yesterday_data.price
-
-                    if is_booked:
-                        alerts_generated.append(f"【{date_str}】 {comp.name} が満室になりました。")
-                    elif diff >= 3000:
-                        alerts_generated.append(f"【{date_str}】 {comp.name} が {diff:,}円 の大幅値上げを行いました。")
-                    elif diff <= -3000:
-                        alerts_generated.append(f"【{date_str}】 {comp.name} が {abs(diff):,}円 の大幅値下げを行いました。")
-
-        db.commit()
-
-        # 3. Send consolidated LINE notification if there are alerts
-        if alerts_generated:
-            msg = "\n".join(["\n[レベニューアシスタント アラート]"] + alerts_generated)
-            notifier_service.send_message(msg)
-
-        print(f"[{datetime.datetime.now()}] [Scheduler] Sync completed.")
-
-    except Exception as e:
-        print(f"[Scheduler Error] {e}")
-        db.rollback()
-    finally:
-        db.close()
+    with SessionLocal() as db:
+        today = dt.date.today()
+        try:
+            data = collect_market_data(db, today, 7)
+            alerts = create_alerts(data)
+            if alerts:
+                body = "[Revenue Assistant alert]\n" + "\n".join(alert.message for alert in alerts)
+                notifier_service.send_message(body)
+            logger.info("Scheduled market sync completed")
+        except Exception:
+            logger.exception("Scheduled market sync failed")
 
 
 def start_scheduler():
-    scheduler = BackgroundScheduler()
-    # In production, this would run daily at 10:00 AM:
-    # scheduler.add_job(scheduled_scraping_job, 'cron', hour=10, minute=0)
+    settings = get_settings()
+    if not settings.scheduler_enabled or _scheduler.running:
+        return
+    if settings.environment == "demo":
+        _scheduler.add_job(
+            scheduled_scraping_job,
+            "interval",
+            minutes=settings.demo_sync_interval_minutes,
+            id="market-sync",
+            replace_existing=True,
+        )
+    else:
+        _scheduler.add_job(
+            scheduled_scraping_job,
+            "cron",
+            hour=settings.daily_sync_hour,
+            minute=settings.daily_sync_minute,
+            id="market-sync",
+            replace_existing=True,
+        )
+    _scheduler.start()
 
-    # For testing/demo purposes, we run it every 5 minutes
-    scheduler.add_job(scheduled_scraping_job, 'interval', minutes=5)
 
-    scheduler.start()
+def stop_scheduler():
+    if _scheduler.running:
+        _scheduler.shutdown(wait=False)
