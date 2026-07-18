@@ -1,298 +1,384 @@
-from fastapi import FastAPI, Depends, HTTPException
-from contextlib import asynccontextmanager
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-import io
+"""Revenue Assistant API: safe MVP foundation for a pilot deployment."""
+
 import csv
-from typing import List
-import datetime
-import random
+import datetime as dt
+import io
+import secrets
+from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
-from database import engine, Base, get_db
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from billing import BillingConfigurationError, stripe_billing
+from database import Base, SessionLocal, engine, get_db, is_sqlite
 import models
-from scraper import scraper_service
-from scheduler import start_scheduler
+from pms import PROFILES, get_profile
+from scheduler import start_scheduler, stop_scheduler
+from scraper import DataCollectionError, ScrapeResult, scraper_service
+from settings import get_settings
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+settings = get_settings()
+ALLOWED_OTA_HOSTS = ("booking.com", "airbnb.com", "jalan.net", "rakuten.co.jp")
+
+
+def _migrate_local_sqlite() -> None:
+    """Small compatibility migration for existing demo databases.
+
+    Production deployments must apply a reviewed migration through their normal
+    release process; this helper intentionally runs only for local SQLite.
+    """
+    if not is_sqlite:
+        return
+    with engine.begin() as connection:
+        columns = {row[1] for row in connection.execute(text("PRAGMA table_info(competitor_prices)"))}
+        if columns and "source" not in columns:
+            connection.execute(text("ALTER TABLE competitor_prices ADD COLUMN source VARCHAR DEFAULT 'unknown'"))
+        try:
+            connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_competitor_price_date_idx ON competitor_prices (competitor_id, date)"))
+        except IntegrityError:
+            # Historical demo rows can contain duplicates.  Keep the newest row,
+            # then enforce the invariant for all future collection runs.
+            connection.execute(text("DELETE FROM competitor_prices WHERE id NOT IN (SELECT MAX(id) FROM competitor_prices GROUP BY competitor_id, date)"))
+            connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_competitor_price_date_idx ON competitor_prices (competitor_id, date)"))
+
+
+def _seed_demo_data(db: Session) -> None:
+    if db.query(models.DBFacility).first():
+        return
+    db.add(models.DBFacility(id=1, name="サンプル施設", base_price=10_000, min_price=5_000, max_price=30_000))
+    db.add_all([
+        models.DBCompetitor(id=1, name="競合A", url="https://travel.rakuten.co.jp/HOTEL/14138/14138.html"),
+        models.DBCompetitor(id=2, name="競合B", url="https://www.booking.com/hotel/jp/tokyo-station.ja.html"),
+        models.DBCompetitor(id=3, name="競合C", url="https://www.jalan.net/yad000000/"),
+    ])
+    db.commit()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Retrieve the dependency mapping, if overridden (e.g. by TestClient)
-    db_dependency = app.dependency_overrides.get(get_db, get_db)
-    db = next(db_dependency())
-    if not db.query(models.DBFacility).first():
-        db.add(models.DBFacility(id=1, name="自社ホテル（サンプル）", base_price=10000))
-        # Add real URLs for demonstration
-        db.add(models.DBCompetitor(id=1, name="ホテルA (アパ新宿)", url="https://travel.rakuten.co.jp/HOTEL/14138/14138.html"))
-        db.add(models.DBCompetitor(id=2, name="ゲストハウスB (東京駅前)", url="https://www.booking.com/hotel/jp/tokyo-station.ja.html"))
-        db.add(models.DBCompetitor(id=3, name="Cヴィラ (京都鴨川)", url="https://travel.rakuten.co.jp/HOTEL/180290/180290.html"))
-        db.commit()
-
-    # Start the background scheduler
+    if settings.environment == "production" and not settings.admin_api_key:
+        raise RuntimeError("ADMIN_API_KEY is required in production")
+    Base.metadata.create_all(bind=engine)
+    _migrate_local_sqlite()
+    with SessionLocal() as db:
+        _seed_demo_data(db)
     start_scheduler()
     yield
+    stop_scheduler()
 
-app = FastAPI(title="Revenue Assistant API - Competitor Focus", lifespan=lifespan)
 
+app = FastAPI(title="Revenue Assistant API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "PUT", "POST"],
+    allow_headers=["Content-Type", "X-Admin-Key"],
 )
 
-def run_scraper(db: Session, date_str: str):
-    """
-    Runs the scraper for all competitors for a given date.
-    """
-    target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-    yesterday_str = (target_date - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
+def require_admin(x_admin_key: str | None = Header(default=None)) -> None:
+    """Protect mutations when an admin key has been configured.
+
+    Demo mode permits unauthenticated local changes.  Production refuses to
+    start without the key, making an accidental public write API impossible.
+    """
+    if settings.admin_api_key and not secrets.compare_digest(x_admin_key or "", settings.admin_api_key):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin key")
+
+
+def _parse_date(value: str) -> dt.date:
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Date must be YYYY-MM-DD") from exc
+
+
+def _validate_ota_url(url: str) -> None:
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not host:
+        raise HTTPException(status_code=422, detail="Competitor URL must use HTTPS")
+    if not any(host == allowed or host.endswith(f".{allowed}") for allowed in ALLOWED_OTA_HOSTS):
+        raise HTTPException(status_code=422, detail="Only configured OTA domains are allowed")
+
+
+def _store_result(db: Session, competitor: models.DBCompetitor, date: dt.date, result: ScrapeResult) -> models.DBCompetitorPrice:
+    date_string = date.isoformat()
+    existing = db.query(models.DBCompetitorPrice).filter_by(competitor_id=competitor.id, date=date_string).first()
+    if existing:
+        return existing
+    record = models.DBCompetitorPrice(
+        date=date_string,
+        competitor_id=competitor.id,
+        price=result.price,
+        is_fully_booked=result.is_fully_booked,
+        scraped_at=dt.datetime.now(dt.timezone.utc).isoformat(),
+        source=result.source,
+    )
+    db.add(record)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        return db.query(models.DBCompetitorPrice).filter_by(competitor_id=competitor.id, date=date_string).one()
+    return record
+
+
+def collect_market_data(db: Session, start: dt.date, days: int) -> list[models.CompetitorPrice]:
     competitors = db.query(models.DBCompetitor).all()
-    if not competitors:
-        return
+    for offset in range(days):
+        date = start + dt.timedelta(days=offset)
+        previous_date = date - dt.timedelta(days=1)
+        for competitor in competitors:
+            try:
+                if not db.query(models.DBCompetitorPrice).filter_by(competitor_id=competitor.id, date=date.isoformat()).first():
+                    _store_result(db, competitor, date, scraper_service.extract_price(competitor.url, date.isoformat(), competitor.id))
+                if not db.query(models.DBCompetitorPrice).filter_by(competitor_id=competitor.id, date=previous_date.isoformat()).first():
+                    _store_result(db, competitor, previous_date, scraper_service.extract_price(competitor.url, previous_date.isoformat(), competitor.id))
+            except DataCollectionError as exc:
+                db.rollback()
+                raise HTTPException(status_code=503, detail=f"Market data is unavailable for {competitor.name}") from exc
+    db.commit()
 
-    for comp in competitors:
-        # Check if we already have data for today
-        existing = db.query(models.DBCompetitorPrice).filter(
-            models.DBCompetitorPrice.competitor_id == comp.id,
-            models.DBCompetitorPrice.date == date_str
-        ).first()
-
-        if existing:
-            continue # Already scraped
-
-        print(f"[API] Running scraper for {comp.name} on {date_str}...")
-        price_today, is_fully_booked = scraper_service.extract_price(comp.url, date_str, comp.id, db)
-
-        # Ensure yesterday's data exists for difference calculation
-        existing_yesterday = db.query(models.DBCompetitorPrice).filter(
-            models.DBCompetitorPrice.competitor_id == comp.id,
-            models.DBCompetitorPrice.date == yesterday_str
-        ).first()
-
-        if not existing_yesterday:
-             # Run scraper for yesterday too to get a baseline
-             price_yesterday, _ = scraper_service.extract_price(comp.url, yesterday_str, comp.id, db)
-             db.add(models.DBCompetitorPrice(
-                date=yesterday_str,
-                competitor_id=comp.id,
-                price=price_yesterday,
-                is_fully_booked=False,
-                scraped_at=datetime.datetime.now().isoformat()
+    rows: list[models.CompetitorPrice] = []
+    for offset in range(days):
+        date = start + dt.timedelta(days=offset)
+        previous_date = date - dt.timedelta(days=1)
+        for competitor in competitors:
+            current = db.query(models.DBCompetitorPrice).filter_by(competitor_id=competitor.id, date=date.isoformat()).one()
+            previous = db.query(models.DBCompetitorPrice).filter_by(competitor_id=competitor.id, date=previous_date.isoformat()).one()
+            source = current.source if current.source in {"apify", "simulation"} else "unknown"
+            rows.append(models.CompetitorPrice(
+                date=date.isoformat(), competitor_id=competitor.id, competitor_name=competitor.name,
+                price_today=current.price, price_yesterday=previous.price,
+                difference=current.price - previous.price,
+                is_fully_booked=current.is_fully_booked, source=source,
             ))
-
-        db.add(models.DBCompetitorPrice(
-            date=date_str,
-            competitor_id=comp.id,
-            price=price_today,
-            is_fully_booked=is_fully_booked,
-            scraped_at=datetime.datetime.now().isoformat()
-        ))
-    db.commit()
+    return rows
 
 
+def create_alerts(market_data: list[models.CompetitorPrice]) -> list[models.Alert]:
+    alerts: list[models.Alert] = []
+    for item in market_data:
+        if item.is_fully_booked:
+            message, alert_type = f"{item.date}: {item.competitor_name} が満室です。", "sold_out"
+        elif item.difference >= 3_000:
+            message, alert_type = f"{item.date}: {item.competitor_name} が前日比 ¥{item.difference:,} 値上げしました。", "increase"
+        elif item.difference <= -3_000:
+            message, alert_type = f"{item.date}: {item.competitor_name} が前日比 ¥{abs(item.difference):,} 値下げしました。", "decrease"
+        else:
+            continue
+        alerts.append(models.Alert(id=len(alerts) + 1, date=item.date, message=message, type=alert_type))
+    return alerts
 
 
+def _price_to_rank(price: int) -> str:
+    if price >= 20_000:
+        return "A"
+    if price >= 15_000:
+        return "B"
+    if price >= 10_000:
+        return "C"
+    return "D"
 
-# --- ENDPOINTS ---
 
-@app.get("/config/{key}", response_model=models.SystemConfig)
-def get_config(key: str, db: Session = Depends(get_db)):
-    config = db.query(models.DBSystemConfig).filter(models.DBSystemConfig.key == key).first()
-    if not config:
-        # Return empty string if not found
-        return models.SystemConfig(key=key, value="")
-    return config
-
-@app.post("/config/{key}", response_model=models.SystemConfig)
-def set_config(key: str, payload: models.SystemConfig, db: Session = Depends(get_db)):
-    config = db.query(models.DBSystemConfig).filter(models.DBSystemConfig.key == key).first()
-    if not config:
-        config = models.DBSystemConfig(key=key, value=payload.value)
-        db.add(config)
+def build_recommendation(db: Session, date: dt.date) -> models.MarketRecommendation:
+    facility = db.query(models.DBFacility).first()
+    if not facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    data = collect_market_data(db, date, 1)
+    available = [item for item in data if not item.is_fully_booked]
+    if not available:
+        raw, reasoning = int(facility.base_price * 1.5), "全競合が満室のため、上限内で需要の強い価格を提案します。"
     else:
-        config.value = payload.value
-    db.commit()
-    db.refresh(config)
-    return config
+        average = sum(item.price_today for item in available) / len(available)
+        increases = [item for item in available if item.difference >= 3_000]
+        if increases:
+            raw = int(average * 0.95)
+            reasoning = "競合の大幅値上げを検知したため、競争力を維持しつつ価格を引き上げます。"
+        else:
+            raw = facility.base_price
+            reasoning = "大きな市場変動がないため、基準価格を維持します。"
+    suggested = round(min(max(raw, facility.min_price), facility.max_price) / 100) * 100
+    return models.MarketRecommendation(date=date.isoformat(), suggested_price=suggested, suggested_rank=_price_to_rank(suggested), reasoning=reasoning)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "environment": settings.environment}
+
+
+@app.get("/integrations/status", response_model=models.IntegrationStatus)
+def integration_status():
+    actors = (settings.apify_actor_booking, settings.apify_actor_airbnb, settings.apify_actor_jalan, settings.apify_actor_rakuten)
+    return models.IntegrationStatus(
+        environment=settings.environment,
+        apify_configured=bool(settings.apify_api_token and any(actors)),
+        line_messaging_configured=bool(settings.line_channel_access_token and settings.line_user_id),
+        stripe_configured=stripe_billing.configured,
+        simulation_enabled=settings.allow_simulated_data,
+    )
+
 
 @app.get("/facility", response_model=models.Facility)
 def get_facility(db: Session = Depends(get_db)):
-    return db.query(models.DBFacility).first()
+    facility = db.query(models.DBFacility).first()
+    if not facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    return facility
 
-from fastapi import HTTPException
 
-@app.put("/facility", response_model=models.Facility)
+@app.put("/facility", response_model=models.Facility, dependencies=[Depends(require_admin)])
 def update_facility(payload: models.FacilityUpdate, db: Session = Depends(get_db)):
     facility = db.query(models.DBFacility).first()
     if not facility:
         raise HTTPException(status_code=404, detail="Facility not found")
-    facility.min_price = payload.min_price
-    facility.max_price = payload.max_price
+    facility.min_price, facility.max_price = payload.min_price, payload.max_price
     db.commit()
     db.refresh(facility)
     return facility
 
-@app.get("/competitors", response_model=List[models.Competitor])
+
+@app.get("/competitors", response_model=list[models.Competitor])
 def get_competitors(db: Session = Depends(get_db)):
     return db.query(models.DBCompetitor).all()
 
-@app.put("/competitors/{comp_id}", response_model=models.Competitor)
+
+@app.put("/competitors/{comp_id}", response_model=models.Competitor, dependencies=[Depends(require_admin)])
 def update_competitor(comp_id: int, payload: models.CompetitorUpdate, db: Session = Depends(get_db)):
-    comp = db.query(models.DBCompetitor).filter(models.DBCompetitor.id == comp_id).first()
-    if not comp:
+    _validate_ota_url(payload.url)
+    competitor = db.query(models.DBCompetitor).filter_by(id=comp_id).first()
+    if not competitor:
         raise HTTPException(status_code=404, detail="Competitor not found")
-    comp.name = payload.name
-    comp.url = payload.url
+    competitor.name, competitor.url = payload.name, payload.url
     db.commit()
-    db.refresh(comp)
-    return comp
+    db.refresh(competitor)
+    return competitor
 
-@app.get("/market_data", response_model=List[models.CompetitorPrice])
-def get_market_data(start_date: str, days: int = 7, db: Session = Depends(get_db)):
-    start = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
-    results = []
 
-    # Run scraper to ensure we have data for requested dates
-    for i in range(days):
-        current_date = (start + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-        run_scraper(db, current_date)
+@app.get("/market_data", response_model=list[models.CompetitorPrice])
+def get_market_data(start_date: str, days: int = Query(default=7, ge=1, le=31), db: Session = Depends(get_db)):
+    return collect_market_data(db, _parse_date(start_date), days)
 
-    for i in range(days):
-        current_date = (start + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-        yesterday_str = (start + datetime.timedelta(days=i-1)).strftime("%Y-%m-%d")
 
-        comps = db.query(models.DBCompetitor).all()
-        for comp in comps:
-            today_data = db.query(models.DBCompetitorPrice).filter(
-                models.DBCompetitorPrice.competitor_id == comp.id,
-                models.DBCompetitorPrice.date == current_date
-            ).first()
+@app.get("/alerts", response_model=list[models.Alert])
+def get_alerts(start_date: str, days: int = Query(default=7, ge=1, le=31), db: Session = Depends(get_db)):
+    return create_alerts(collect_market_data(db, _parse_date(start_date), days))
 
-            yesterday_data = db.query(models.DBCompetitorPrice).filter(
-                models.DBCompetitorPrice.competitor_id == comp.id,
-                models.DBCompetitorPrice.date == yesterday_str
-            ).first()
-
-            if today_data:
-                price_today = today_data.price
-                price_yesterday = yesterday_data.price if yesterday_data else price_today
-
-                results.append(models.CompetitorPrice(
-                    date=current_date,
-                    competitor_id=comp.id,
-                    competitor_name=comp.name,
-                    price_today=price_today,
-                    price_yesterday=price_yesterday,
-                    difference=price_today - price_yesterday,
-                    is_fully_booked=today_data.is_fully_booked
-                ))
-    return results
-
-@app.get("/alerts", response_model=List[models.Alert])
-def get_alerts(start_date: str, days: int = 7, db: Session = Depends(get_db)):
-    market_data = get_market_data(start_date, days, db)
-    alerts = []
-    alert_id = 1
-
-    for c in market_data:
-        if c.is_fully_booked:
-            alerts.append(models.Alert(
-                id=alert_id, date=c.date,
-                message=f"{c.competitor_name} が満室になりました。需要が非常に高まっています。",
-                type="sold_out"
-            ))
-            alert_id += 1
-        elif c.difference >= 3000:
-            alerts.append(models.Alert(
-                id=alert_id, date=c.date,
-                message=f"{c.competitor_name} が {c.date} の料金を +{c.difference:,}円 大幅に値上げしました！",
-                type="increase"
-            ))
-            alert_id += 1
-        elif c.difference <= -3000:
-            alerts.append(models.Alert(
-                id=alert_id, date=c.date,
-                message=f"{c.competitor_name} が {c.date} の料金を {c.difference:,}円 大幅に値下げしました。",
-                type="decrease"
-            ))
-            alert_id += 1
-
-    return alerts
-
-def price_to_rank(price: int) -> str:
-    if price >= 20000: return "A"
-    if price >= 15000: return "B"
-    if price >= 10000: return "C"
-    return "D"
 
 @app.get("/recommendation", response_model=models.MarketRecommendation)
 def get_recommendation(date: str, db: Session = Depends(get_db)):
-    comp_data = get_market_data(start_date=date, days=1, db=db)
-    facility = get_facility(db)
+    return build_recommendation(db, _parse_date(date))
 
-    available_comps = [c for c in comp_data if not c.is_fully_booked]
-    if not available_comps:
-         raw_suggested = int(facility.base_price * 1.5)
-         suggested = min(max(raw_suggested, facility.min_price), facility.max_price)
-         return models.MarketRecommendation(
-            date=date,
-            suggested_price=suggested,
-            suggested_rank=price_to_rank(suggested),
-            reasoning="ベンチマーク施設がすべて満室です。強気の価格設定を推奨しますが、上限・下限設定（ガードレール）の範囲内に調整しました。"
-        )
 
-    avg_comp_price = sum(c.price_today for c in available_comps) / len(available_comps)
+@app.get("/pms/profiles", response_model=list[models.PmsProfile])
+def get_pms_profiles():
+    return [models.PmsProfile(id=item.id, name=item.name, verified=item.verified, description=item.description) for item in PROFILES.values()]
 
-    major_increases = [c for c in available_comps if c.difference >= 3000]
 
-    if major_increases:
-        raw_suggested = int(avg_comp_price * 0.95)
-        suggested = min(max(raw_suggested, facility.min_price), facility.max_price)
-        names = "、".join([c.competitor_name for c in major_increases])
-        reasoning = f"{names} が大幅に値上げしています。市場平均に合わせて上限・下限の範囲内で価格を引き上げることを推奨します。"
-    else:
-        suggested = int(facility.base_price)
-        suggested = min(max(suggested, facility.min_price), facility.max_price)
-        reasoning = "競合の価格に大きな変動はありません。現在の基本価格を維持して様子を見ることを推奨します。"
-
-    suggested = round(suggested / 100) * 100
-
-    return models.MarketRecommendation(
-        date=date,
-        suggested_price=suggested,
-        suggested_rank=price_to_rank(suggested),
-        reasoning=reasoning
+@app.get("/billing/status", response_model=models.BillingStatus, dependencies=[Depends(require_admin)])
+def billing_status(db: Session = Depends(get_db)):
+    subscription = db.query(models.DBSubscription).first()
+    return models.BillingStatus(
+        configured=stripe_billing.configured,
+        subscription_status=subscription.status if subscription else "inactive",
     )
 
+
+@app.post("/billing/checkout", response_model=models.CheckoutSession, dependencies=[Depends(require_admin)])
+def create_checkout(db: Session = Depends(get_db)):
+    facility = db.query(models.DBFacility).first()
+    if not facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    try:
+        return models.CheckoutSession(checkout_url=stripe_billing.create_checkout(facility.id))
+    except BillingConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="Stripe Billing is not configured") from exc
+
+
+@app.post("/billing/portal", response_model=models.CheckoutSession, dependencies=[Depends(require_admin)])
+def create_portal(db: Session = Depends(get_db)):
+    subscription = db.query(models.DBSubscription).first()
+    if not subscription or not subscription.stripe_customer_id:
+        raise HTTPException(status_code=404, detail="No Stripe customer is linked to this facility")
+    try:
+        return models.CheckoutSession(checkout_url=stripe_billing.create_portal(subscription.stripe_customer_id))
+    except BillingConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="Stripe Billing is not configured") from exc
+
+
+@app.post("/webhooks/stripe", status_code=status.HTTP_200_OK)
+async def stripe_webhook(request: Request, stripe_signature: str | None = Header(default=None)):
+    try:
+        event = stripe_billing.verify_event(await request.body(), stripe_signature)
+    except BillingConfigurationError as exc:
+        raise HTTPException(status_code=400, detail="Invalid Stripe webhook") from exc
+
+    event_type = event["type"]
+    data = event["data"]["object"]
+    if event_type not in {"checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted"}:
+        return {"received": True}
+
+    facility_id = None
+    customer_id = None
+    subscription_id = None
+    subscription_status = "inactive"
+    price_id = settings.stripe_price_id_pro
+    if event_type == "checkout.session.completed":
+        facility_id = int(data.get("metadata", {}).get("facility_id") or data.get("client_reference_id") or 0)
+        customer_id = data.get("customer")
+        subscription_id = data.get("subscription")
+        subscription_status = "active"
+    else:
+        subscription_id = data.get("id")
+        customer_id = data.get("customer")
+        subscription_status = data.get("status", "inactive")
+        items = data.get("items", {}).get("data", [])
+        if items:
+            price_id = items[0].get("price", {}).get("id", price_id)
+
+    if not subscription_id:
+        return {"received": True}
+    with SessionLocal() as db:
+        record = db.query(models.DBSubscription).filter_by(stripe_subscription_id=subscription_id).first()
+        if not record and facility_id:
+            record = db.query(models.DBSubscription).filter_by(facility_id=facility_id).first()
+        if record is None and facility_id:
+            record = models.DBSubscription(facility_id=facility_id, updated_at=dt.datetime.now(dt.timezone.utc).isoformat())
+            db.add(record)
+        if record:
+            record.stripe_customer_id = customer_id or record.stripe_customer_id
+            record.stripe_subscription_id = subscription_id
+            record.status = subscription_status
+            record.price_id = price_id
+            record.updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
+            db.commit()
+    return {"received": True}
+
+
 @app.get("/export_csv")
-def export_csv(start_date: str, days: int = 7, db: Session = Depends(get_db)):
-    start = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
-
+def export_csv(start_date: str, days: int = Query(default=7, ge=1, le=31), profile: str = "generic", db: Session = Depends(get_db)):
+    try:
+        export_profile = get_profile(profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    start = _parse_date(start_date)
+    facility = db.query(models.DBFacility).first()
     output = io.StringIO()
-    # 日本語のサイトコントローラー向けにBOM付きUTF-8で出力する（Excelでの文字化け防止）
-    output.write('\ufeff')
+    output.write("\ufeff")
     writer = csv.writer(output)
-
-    # 国内の代表的なサイトコントローラー（ねっぱん！等）のCSV取込フォーマットを模したヘッダー
-    writer.writerow(["対象年月日", "部屋タイプコード", "部屋タイプ名", "適用料金ランク", "設定料金(参考)"])
-
-    for i in range(days):
-        current_date_str = (start + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-        rec = get_recommendation(current_date_str, db)
-
-        # デモ用に固定の部屋タイプに対してランクを出力
-        # 日付は YYYY/MM/DD 形式に変換
-        formatted_date = current_date_str.replace("-", "/")
-        writer.writerow([formatted_date, "RM01", "スタンダードツイン", rec.suggested_rank, rec.suggested_price])
-
-    output.seek(0)
+    writer.writerow(export_profile.headers)
+    for offset in range(days):
+        date = start + dt.timedelta(days=offset)
+        recommendation = build_recommendation(db, date)
+        writer.writerow([date.isoformat(), f"facility-{facility.id}", "standard", "standard", recommendation.suggested_rank, recommendation.suggested_price])
     return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=pms_upload_{start_date}.csv"}
+        iter([output.getvalue()]), media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=revenue_{profile}_{start.isoformat()}.csv"},
     )

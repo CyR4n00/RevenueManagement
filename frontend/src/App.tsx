@@ -1,264 +1,93 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import './App.css';
 import { SettingsPanel } from './SettingsPanel';
 
-interface Competitor {
-  id: number;
-  name: string;
-}
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 interface CompetitorPrice {
   date: string;
   competitor_id: number;
   competitor_name: string;
   price_today: number;
-  price_yesterday: number;
   difference: number;
   is_fully_booked: boolean;
+  source: 'apify' | 'simulation' | 'unknown';
 }
+interface Alert { id: number; date: string; message: string; type: 'increase' | 'decrease' | 'sold_out'; }
+interface Recommendation { date: string; suggested_price: number; suggested_rank: string; reasoning: string; }
+interface PmsProfile { id: string; name: string; verified: boolean; description: string; }
 
-interface Alert {
-  id: number;
-  date: string;
-  message: string;
-  type: string;
-}
-
-interface Recommendation {
-  date: string;
-  suggested_price: number;
-  suggested_rank: string;
-  reasoning: string;
-}
-
-const API_BASE = 'http://localhost:8000';
+function today() { return new Date().toISOString().slice(0, 10); }
 
 function App() {
-  const [showSettings, setShowSettings] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const today = new Date();
-    today.setFullYear(2026, 6, 20); // Base mock date: 2026-07-20 (Summer)
-    return today.toISOString().split('T')[0];
-  });
-
+  const [selectedDate, setSelectedDate] = useState(today());
   const [marketData, setMarketData] = useState<CompetitorPrice[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
-  const [dates, setDates] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [profiles, setProfiles] = useState<PmsProfile[]>([]);
+  const [profile, setProfile] = useState('generic');
+  const [showSettings, setShowSettings] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const handleDownloadCsv = () => {
-    window.open(`${API_BASE}/export_csv?start_date=${selectedDate}&days=7`, '_blank');
-  };
+  const dates = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(`${selectedDate}T00:00:00`);
+    date.setDate(date.getDate() + index);
+    return date.toISOString().slice(0, 10);
+  });
 
   const fetchData = async () => {
-    setIsLoading(true);
+    setLoading(true);
+    setError('');
     try {
-      // Calculate next 7 days starting from selected date
-      const start = new Date(selectedDate);
-      const d = [];
-      for (let i = 0; i < 7; i++) {
-        const nextDate = new Date(start);
-        nextDate.setDate(start.getDate() + i);
-        d.push(nextDate.toISOString().split('T')[0]);
-      }
-      setDates(d);
-
-      const [marketRes, alertsRes, recRes] = await Promise.all([
-        axios.get(`${API_BASE}/market_data?start_date=${selectedDate}&days=7`),
-        axios.get(`${API_BASE}/alerts?start_date=${selectedDate}&days=7`),
-        axios.get(`${API_BASE}/recommendation?date=${selectedDate}`)
+      const [market, alert, rec, exportProfiles] = await Promise.all([
+        axios.get<CompetitorPrice[]>(`${API_BASE}/market_data`, { params: { start_date: selectedDate, days: 7 } }),
+        axios.get<Alert[]>(`${API_BASE}/alerts`, { params: { start_date: selectedDate, days: 7 } }),
+        axios.get<Recommendation>(`${API_BASE}/recommendation`, { params: { date: selectedDate } }),
+        axios.get<PmsProfile[]>(`${API_BASE}/pms/profiles`),
       ]);
-
-      setMarketData(marketRes.data);
-      setAlerts(alertsRes.data);
-      setRecommendation(recRes.data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoading(false);
-    }
+      setMarketData(market.data);
+      setAlerts(alert.data);
+      setRecommendation(rec.data);
+      setProfiles(exportProfiles.data);
+    } catch {
+      setError('データを取得できませんでした。バックエンドの起動状態と連携設定を確認してください。');
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [selectedDate, showSettings]); // Refresh when date changes or settings close
+  useEffect(() => { fetchData(); }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Group market data by competitor for the Tower view
-  const comps = Array.from(new Set(marketData.map(m => m.competitor_name)));
+  const competitors = Array.from(new Set(marketData.map(item => item.competitor_name)));
+  const hasSimulation = marketData.some(item => item.source === 'simulation');
+  const downloadCsv = () => window.open(`${API_BASE}/export_csv?start_date=${selectedDate}&days=7&profile=${profile}`, '_blank', 'noopener,noreferrer');
 
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-800">
-      <div className="max-w-6xl mx-auto space-y-6">
+  return <main className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-800">
+    <div className="mx-auto max-w-6xl space-y-6">
+      <header className="flex flex-col gap-4 rounded-xl border bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div><h1 className="text-2xl font-bold">Revenue Assistant</h1><p className="text-sm text-slate-500">競合料金・アラート・安全な価格提案</p></div>
+        <div className="flex items-center gap-3">
+          <input aria-label="開始日" type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} className="rounded border p-2" disabled={loading} />
+          <button onClick={() => setShowSettings(!showSettings)} className="rounded border px-3 py-2 text-sm font-semibold hover:bg-slate-50">設定</button>
+        </div>
+      </header>
 
-        {/* Header Section */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">レベニューアシスタント <span className="text-sm font-normal text-gray-500 ml-2">〜競合調査・価格提案ツール〜</span></h1>
-          </div>
-          <div className="flex space-x-3 items-center">
-             <input
-              type="date"
-              aria-label="基準日を選択"
-              className={`p-2 border border-gray-300 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold text-gray-700 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              disabled={isLoading}
-            />
-            <div className="h-6 border-l border-gray-300"></div>
-            <button
-               aria-label={showSettings ? "ベンチマーク設定を閉じる" : "ベンチマーク設定を開く"}
-               aria-expanded={showSettings}
-               onClick={() => setShowSettings(!showSettings)}
-               disabled={isLoading}
-               className={`text-sm font-bold border px-3 py-2 rounded transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 focus-visible:outline-none ${showSettings ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-600 hover:bg-gray-50'} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-             >
-               ⚙️ ベンチマーク設定
-            </button>
-          </div>
-        </header>
+      {showSettings && <SettingsPanel apiBase={API_BASE} onClose={() => { setShowSettings(false); fetchData(); }} />}
+      {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {hasSimulation && <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">現在はデモデータです。実運用前にApify APIトークンとOTA別Actorをサーバー環境変数へ設定してください。</p>}
 
-        {showSettings ? (
-           <SettingsPanel onClose={() => setShowSettings(false)} />
-        ) : (
-          <div className={`space-y-6 transition-opacity duration-200 ${isLoading ? 'opacity-50 pointer-events-none' : ''}`} aria-busy={isLoading}>
+      <section className="grid gap-6 lg:grid-cols-3">
+        <article className="rounded-xl bg-gradient-to-br from-indigo-600 to-blue-600 p-5 text-white shadow">
+          <p className="text-xs font-bold uppercase tracking-wider text-blue-100">AI価格提案</p>
+          {recommendation ? <><p className="mt-4 text-5xl font-extrabold">ランク {recommendation.suggested_rank}</p><p className="mt-2 text-xl">¥{recommendation.suggested_price.toLocaleString()}</p><p className="mt-4 rounded bg-white/15 p-3 text-sm leading-relaxed">{recommendation.reasoning}</p></> : <p className="mt-4">読み込み中…</p>}
+          <div className="mt-5 flex gap-2"><select aria-label="CSVプロファイル" value={profile} onChange={event => setProfile(event.target.value)} className="min-w-0 flex-1 rounded p-2 text-sm text-slate-800">{profiles.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button onClick={downloadCsv} className="rounded bg-white px-3 py-2 text-sm font-bold text-blue-700">CSV出力</button></div>
+        </article>
+        <article className="rounded-xl border bg-white p-5 shadow-sm lg:col-span-2"><h2 className="font-bold">市場アラート</h2><div className="mt-4 space-y-2">{alerts.length ? alerts.map(alert => <p key={alert.id} className={`rounded border-l-4 p-3 text-sm ${alert.type === 'increase' ? 'border-red-500 bg-red-50' : alert.type === 'decrease' ? 'border-blue-500 bg-blue-50' : 'border-slate-500 bg-slate-100'}`}>{alert.message}</p>) : <p className="py-8 text-center text-sm text-slate-400">対象期間に大きな変動はありません。</p>}</div></article>
+      </section>
 
-            {/* Top Row: AI Suggestion & Alerts */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-              {/* AI Assistant Panel */}
-              <div className="lg:col-span-1 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-md p-5 text-white flex flex-col justify-between">
-                <div>
-                   <h2 className="text-xs font-bold uppercase tracking-wider text-blue-100 flex items-center">
-                     <span className="text-xl mr-2">🤖</span> AI 価格提案 ({selectedDate})
-                   </h2>
-                   {recommendation ? (
-                     <div className="mt-4">
-                       <p className="text-sm text-blue-100 mb-1">推奨価格・ランク</p>
-                       <div className="flex items-baseline">
-                         <p className="text-5xl font-extrabold tracking-tight">
-                           ランク {recommendation.suggested_rank}
-                         </p>
-                         <p className="ml-3 text-lg opacity-80">
-                           (¥{recommendation.suggested_price.toLocaleString()})
-                         </p>
-                       </div>
-                       <div className="mt-4 bg-white bg-opacity-20 rounded p-3 text-sm leading-relaxed">
-                         {recommendation.reasoning}
-                       </div>
-                     </div>
-                   ) : (
-                     <p className="mt-4 text-blue-200">データ分析中...</p>
-                   )}
-                </div>
-                <button
-                  aria-label="サイトコントローラー用CSVをダウンロード"
-                  onClick={handleDownloadCsv}
-                  className="mt-6 w-full bg-white text-blue-700 font-bold py-2 rounded shadow hover:bg-blue-50 transition-colors text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-300 focus-visible:outline-none"
-                >
-                  📥 サイトコントローラー用CSVをダウンロード
-                </button>
-              </div>
-
-              {/* Alerts Panel */}
-              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col">
-                 <h2 className="text-sm font-bold text-gray-800 mb-4 flex items-center">
-                   <span className="mr-2">🚨</span> 競合の重要変動アラート
-                 </h2>
-                 <div className="flex-1 overflow-y-auto space-y-3 max-h-64 pr-2">
-                   {alerts.length === 0 ? (
-                     <p className="text-gray-400 text-sm mt-4 text-center">直近で大きな価格変動はありません。</p>
-                   ) : (
-                     alerts.map(alert => (
-                       <div key={alert.id} className={`p-3 rounded-lg border-l-4 text-sm flex items-start ${
-                         alert.type === 'increase' ? 'bg-red-50 border-red-500 text-red-900' :
-                         alert.type === 'decrease' ? 'bg-blue-50 border-blue-500 text-blue-900' :
-                         'bg-yellow-50 border-yellow-500 text-yellow-900'
-                       }`}>
-                         <span className="font-bold mr-2 mt-0.5">
-                           {alert.type === 'increase' ? '↑ 値上げ' : alert.type === 'decrease' ? '↓ 値下げ' : '満室'}
-                         </span>
-                         <span className="leading-snug">{alert.message}</span>
-                       </div>
-                     ))
-                   )}
-                 </div>
-              </div>
-            </div>
-
-            {/* Revenue Tower (Competitor Matrix) */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-               <div className="bg-gray-800 p-4 flex justify-between items-center">
-                 <div>
-                   <h2 className="text-lg font-bold text-white tracking-wider">レベニューカレンダー</h2>
-                   <p className="text-xs text-gray-300 mt-1">ベンチマーク施設の価格変動（前日比）一覧</p>
-                 </div>
-                 <div className="flex space-x-3 text-xs">
-                   <span className="flex items-center text-white"><div className="w-3 h-3 bg-red-100 border border-red-300 mr-1 rounded-sm"></div>値上げ</span>
-                   <span className="flex items-center text-white"><div className="w-3 h-3 bg-blue-100 border border-blue-300 mr-1 rounded-sm"></div>値下げ</span>
-                   <span className="flex items-center text-white"><div className="w-3 h-3 bg-gray-600 border border-gray-500 mr-1 rounded-sm"></div>満室</span>
-                 </div>
-               </div>
-
-               <div className="overflow-x-auto">
-                 <table className="w-full text-left border-collapse">
-                   <thead>
-                     <tr>
-                       <th className="p-3 border-b border-r bg-gray-50 font-bold text-gray-600 text-sm min-w-[150px]">ベンチマーク施設</th>
-                       {dates.map(dateStr => {
-                          const d = new Date(dateStr);
-                          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                          return (
-                           <th key={dateStr} className={`p-3 border-b text-center text-sm font-bold min-w-[120px] ${isWeekend ? 'text-red-600 bg-red-50' : 'text-gray-700 bg-gray-50'}`}>
-                             {d.getMonth()+1}/{d.getDate()} ({['日','月','火','水','木','金','土'][d.getDay()]})
-                           </th>
-                         )
-                       })}
-                     </tr>
-                   </thead>
-                   <tbody>
-                     {comps.map(compName => (
-                       <tr key={compName} className="border-b hover:bg-gray-50">
-                         <td className="p-3 border-r font-bold text-sm text-gray-800">{compName}</td>
-                         {dates.map(dateStr => {
-                           const data = marketData.find(m => m.competitor_name === compName && m.date === dateStr);
-                           if (!data) return <td key={dateStr} className="p-3 text-center text-gray-300">-</td>;
-
-                           if (data.is_fully_booked) {
-                             return (
-                               <td key={dateStr} className="p-3 text-center bg-gray-100 border-x border-gray-50">
-                                 <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-1 rounded">満室 (×)</span>
-                               </td>
-                             );
-                           }
-
-                           const isUp = data.difference > 0;
-                           const isDown = data.difference < 0;
-                           const bgClass = isUp ? 'bg-red-50' : isDown ? 'bg-blue-50' : 'bg-white';
-                           const diffColor = isUp ? 'text-red-600' : isDown ? 'text-blue-600' : 'text-gray-400';
-
-                           return (
-                             <td key={dateStr} className={`p-3 text-center border-x border-gray-50 ${bgClass}`}>
-                               <div className="font-bold text-gray-800 tracking-tight">¥{data.price_today.toLocaleString()}</div>
-                               <div className={`text-[10px] font-bold mt-1 ${diffColor}`}>
-                                 {isUp ? '▲ +' : isDown ? '▼ ' : '▶ '}{Math.abs(data.difference).toLocaleString()}
-                               </div>
-                             </td>
-                           );
-                         })}
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-               </div>
-            </div>
-
-          </div>
-        )}
-      </div>
+      <section className="overflow-x-auto rounded-xl border bg-white shadow-sm"><div className="border-b bg-slate-800 p-4 text-white"><h2 className="font-bold">レベニュータワー</h2><p className="text-xs text-slate-300">前日比：赤＝上昇、青＝下落、グレー＝満室</p></div><table className="w-full min-w-[780px] border-collapse text-sm"><thead><tr><th className="border-b bg-slate-50 p-3 text-left">競合施設</th>{dates.map(date => <th key={date} className="border-b bg-slate-50 p-3 text-center">{date.slice(5).replace('-', '/')}</th>)}</tr></thead><tbody>{competitors.map(competitor => <tr key={competitor}><th className="border-b p-3 text-left">{competitor}</th>{dates.map(date => { const item = marketData.find(data => data.competitor_name === competitor && data.date === date); if (!item) return <td key={date} className="border-b p-3 text-center">—</td>; if (item.is_fully_booked) return <td key={date} className="border-b bg-slate-100 p-3 text-center text-slate-500">満室</td>; const color = item.difference > 0 ? 'bg-red-50 text-red-700' : item.difference < 0 ? 'bg-blue-50 text-blue-700' : ''; return <td key={date} className={`border-b p-3 text-center ${color}`}><strong>¥{item.price_today.toLocaleString()}</strong><br /><small>{item.difference >= 0 ? '+' : ''}{item.difference.toLocaleString()}</small></td>; })}</tr>)}</tbody></table></section>
     </div>
-  );
+  </main>;
 }
 
 export default App;

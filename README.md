@@ -1,44 +1,59 @@
-# Revenue Assistant MVP
+# Revenue Assistant
 
-A local B2B demo application focused on competitor price tracking and revenue recommendations.
+旅館・民泊向けの競合料金モニタリング、ガードレール付き価格提案、CSV出力を提供するレベニューマネジメントMVPです。営業デモからパイロット導入へ進めるため、実データ連携と運用上の安全策を備えています。
 
-## Overview
+## 提供機能
 
-Based on user feedback, this MVP focuses strictly on:
-1. **Competitor Data Analysis:** Simulating OTA scraping to capture competitor pricing and sellouts.
-2. **Visual Revenue Calendar:** Displaying up/down pricing trends among competitors to quickly evaluate the market.
-3. **Automated Recommendations:** Proposing price actions based on real-time changes rather than complex, opaque ML models.
-4. **Push Notifications:** Alerting low-IT-literacy operators via mock LINE/Email integrations only when specific thresholds are breached.
+- **Apify経由のOTAデータ取得**：Booking.com、Airbnb、じゃらん、楽天トラベル向けに、OTAごとに検証済みのActorを設定します。アプリ自身はOTAを直接スクレイピングしません。
+- **レベニュータワー**：競合3施設程度の前日比を、上昇（赤）・下落（青）・満室（グレー）で一覧化します。
+- **価格ガードレール**：最低・最高価格を必ず適用し、A〜Dランクと価格を提案します。
+- **LINE Messaging API通知**：大幅な値動き・満室を通知します。LINE Notifyは利用しません。
+- **PMS CSV出力**：標準CSVを提供します。ねっぱん！／手間いらず向けは、導入先の公式サンプルCSVをもとに検証済みプロファイルを追加する方式です。
+- **Stripe Billing**：Stripe Checkoutによるサブスクリプション開始と、署名検証済みWebhookによる契約状態の同期を備えます。
 
-## Setup & Running
+## ローカル起動
 
-This is designed to run locally for sales pitches.
+1. `backend/.env.example` を `backend/.env` にコピーし、必要な値を設定します。
+2. `frontend/.env.example` を `frontend/.env` にコピーします。
+3. バックエンドで仮想環境を作成し、`pip install -r requirements.txt` を実行します。
+4. `uvicorn main:app --reload --port 8000` を実行します。
+5. `frontend` で `pnpm install`、`pnpm start` を実行します。
 
-### Prerequisites
+デモでは `ALLOW_SIMULATED_DATA=true` で疑似データを利用できます。画面に明示されるため、実データと混同しません。本番では `APP_ENV=production` とし、`ALLOW_SIMULATED_DATA=false`、`ADMIN_API_KEY` の設定を必須にしてください。
 
-- Python 3.9+
-- Node.js & `pnpm` (Must use `pnpm`, not `npm`)
+## Apify設定
 
-### Starting the Application
+次をバックエンドのシークレットとして設定します。
 
-You can use the provided start scripts which boot both the backend and frontend simultaneously.
-
-**Mac / Linux:**
-```bash
-./start.sh
+```text
+APIFY_API_TOKEN=
+APIFY_ACTOR_BOOKING=
+APIFY_ACTOR_AIRBNB=
+APIFY_ACTOR_JALAN=
+APIFY_ACTOR_RAKUTEN=
 ```
 
-**Windows:**
-```bat
-start.bat
+Actorは `startUrls`、`checkIn`、`checkOut`、`adults`、`currency` を受け取り、データセットに宿泊料金（`price`、`pricePerNight`、`amount` 等）または満室状態を返すよう検証してください。OTAの規約とActorの出力仕様は導入前に確認が必要です。
+
+## Supabase移行
+
+`DATABASE_URL` にSupabaseのPostgreSQL接続文字列を設定できます。パイロットから本番へ移行する際は、Supabaseのバックアップ、RLS、ユーザー／施設テナント分離を有効にし、SQLite互換の自動移行ではなくレビュー済みのDBマイグレーションを適用してください。
+
+## Stripe設定
+
+Stripeのキーはクライアントへ渡さず、バックエンドのシークレットにのみ設定します。
+
+```text
+FRONTEND_APP_URL=https://app.example.com
+STRIPE_SECRET_KEY=sk_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_ID_PRO=price_...
 ```
 
-The frontend will be available at `http://localhost:3000`.
-The backend API will be available at `http://localhost:8000`.
+Stripe DashboardのWebhook Endpointには `POST /webhooks/stripe` を登録し、少なくとも `checkout.session.completed`、`customer.subscription.updated`、`customer.subscription.deleted` を送信してください。Webhook署名が正しくないイベントは拒否されます。Checkoutはサブスクリプション用のPrice IDのみをサーバー側で使うため、クライアントから価格を差し替えられません。
 
-## Architecture Details
+## 運用時の注意
 
-- **Backend:** FastAPI, SQLAlchemy, Local SQLite database (`revenue_assistant.db`)
-- **Frontend:** React, TypeScript, Tailwind CSS, Create React App
-- **Scraping:** Currently a local Python stub (`scraper.py`) that returns deterministic, simulated market data for demonstration without risking IP bans.
-- **Future Production Path:** See `DB_ARCHITECTURE.md` for Supabase migration and `API_RESEARCH.md` for Apify integration.
+- `.env` はGit管理しません。デプロイ先のSecret Managerまたは環境変数を利用してください。
+- 本番ではCORSを正規のフロントエンドURLだけに制限し、`ADMIN_API_KEY` を設定します。
+- 現行の「ねっぱん！／手間いらず」CSVは未検証テンプレートです。各社の公式仕様・対象顧客の読み込みサンプルで受入テスト後に `verified` としてください。
