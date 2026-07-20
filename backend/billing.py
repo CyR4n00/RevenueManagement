@@ -1,4 +1,4 @@
-"""Stripe Checkout and webhook helpers for the single-facility MVP."""
+"""Stripe Checkout and webhook helpers for organization subscriptions."""
 
 import stripe
 
@@ -22,15 +22,16 @@ class StripeBilling:
             raise BillingConfigurationError("Stripe is not fully configured")
         stripe.api_key = self.settings.stripe_secret_key
 
-    def create_checkout(self, facility_id: int) -> str:
+    def create_checkout(self, organization_id: str, customer_email: str) -> str:
         self._configure()
         session = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": self.settings.stripe_price_id_pro, "quantity": 1}],
             success_url=f"{self.settings.frontend_app_url}/?checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{self.settings.frontend_app_url}/?checkout=cancelled",
-            client_reference_id=str(facility_id),
-            metadata={"facility_id": str(facility_id)},
+            client_reference_id=organization_id,
+            customer_email=customer_email,
+            metadata={"organization_id": organization_id},
         )
         if not session.url:
             raise BillingConfigurationError("Stripe did not return a Checkout URL")

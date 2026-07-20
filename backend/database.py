@@ -8,7 +8,9 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./revenue_assistant.db")
+# Keep the legacy demo database intact.  The customer-isolated schema uses a
+# new local file and PostgreSQL/Supabase in production.
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./revenue_assistant_v2.db")
 is_sqlite = DATABASE_URL.startswith("sqlite")
 
 engine = create_engine(
