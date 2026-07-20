@@ -1,5 +1,8 @@
 import datetime as dt
 import os
+from dataclasses import replace
+
+import pytest
 
 os.environ["APP_ENV"] = "demo"
 os.environ["SCHEDULER_ENABLED"] = "false"
@@ -7,6 +10,7 @@ os.environ["ALLOW_SIMULATED_DATA"] = "true"
 os.environ["DEMO_BYPASS_BILLING"] = "false"
 os.environ["SUPABASE_AUTH_REQUIRED"] = "false"
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -33,6 +37,7 @@ app.dependency_overrides[get_db] = override_get_db
 
 def reset_database():
     with TestSession() as db:
+        db.query(models.DBCompetitorCollectionRun).delete()
         db.query(models.DBCompetitorPriceObservation).delete()
         db.query(models.DBCompetitorPrice).delete()
         db.query(models.DBCompetitor).delete()
@@ -114,6 +119,29 @@ def test_market_data_batches_stay_dates_into_one_collection_run(monkeypatch):
     assert response.status_code == 200
     assert len(response.json()) == 3
     assert requested_dates == [(dt.date.today() + dt.timedelta(days=offset)).isoformat() for offset in range(3)]
+
+
+def test_production_limits_each_competitor_to_configured_daily_actor_runs(monkeypatch):
+    reset_database()
+    seed_ready_account(with_competitor=True)
+    import main
+
+    monkeypatch.setattr(main, "settings", replace(main.settings, environment="production", daily_sync_hours=(9, 18)))
+    monkeypatch.setattr(
+        main.scraper_service,
+        "extract_prices",
+        lambda _url, target_dates, _comp_id: {
+            target_date: ScrapeResult(price=12_000, is_fully_booked=False, source="apify")
+            for target_date in target_dates
+        },
+    )
+    with TestSession() as db:
+        facility = db.query(models.DBFacility).filter_by(id="facility-1").one()
+        main.collect_market_data(db, facility, dt.date.today(), 1, refresh=True)
+        main.collect_market_data(db, facility, dt.date.today(), 1, refresh=True)
+        with pytest.raises(HTTPException) as error:
+            main.collect_market_data(db, facility, dt.date.today(), 1, refresh=True)
+    assert error.value.status_code == 503
 
 
 def test_dashboard_requires_an_active_subscription():

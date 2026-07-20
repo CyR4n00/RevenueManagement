@@ -5,6 +5,7 @@ import datetime as dt
 import io
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse, urlunparse
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -173,6 +174,35 @@ def _store_result(db: Session, competitor: models.DBCompetitor, date: dt.date, r
     return record
 
 
+def _reserve_collection_run(db: Session, competitor: models.DBCompetitor) -> None:
+    """Reserve a production Actor invocation before it leaves our system.
+
+    Failed provider requests still consume a slot: retrying indefinitely is not
+    compatible with the written daily collection limit.
+    """
+    if settings.environment != "production":
+        return
+    collection_day = dt.datetime.now(ZoneInfo("Asia/Tokyo")).date()
+    limit = len(settings.daily_sync_hours)
+    used = db.query(models.DBCompetitorCollectionRun).filter_by(
+        competitor_id=competitor.id, collection_day=collection_day,
+    ).count()
+    if used >= limit:
+        raise DataCollectionError("The approved daily collection limit has been reached")
+    db.add(models.DBCompetitorCollectionRun(
+        competitor_id=competitor.id,
+        collection_day=collection_day,
+        slot=used + 1,
+        collection_source="apify",
+    ))
+    try:
+        # Commit before calling Apify so a failed call cannot erase its slot.
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise DataCollectionError("A concurrent collection already used this daily slot") from exc
+
+
 def collect_market_data(
     db: Session,
     facility: models.DBFacility,
@@ -196,6 +226,7 @@ def collect_market_data(
         try:
             # A dashboard horizon is one approved Actor run per competitor,
             # rather than one run for every stay date.
+            _reserve_collection_run(db, competitor)
             results = scraper_service.extract_prices(
                 competitor.url, [date.isoformat() for date in dates_to_collect], competitor.id,
             )

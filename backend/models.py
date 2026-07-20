@@ -100,6 +100,21 @@ class DBCompetitorPriceObservation(Base):
     competitor = relationship("DBCompetitor")
 
 
+class DBCompetitorCollectionRun(Base):
+    """A reserved Actor run; it enforces each provider's daily collection cap."""
+
+    __tablename__ = "competitor_collection_runs"
+    __table_args__ = (UniqueConstraint("competitor_id", "collection_day", "slot", name="uq_competitor_collection_run_slot"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    competitor_id = Column(String(36), ForeignKey("competitors.id", ondelete="CASCADE"), nullable=False, index=True)
+    collection_day = Column(Date, nullable=False)
+    slot = Column(Integer, nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=False, default=now_utc)
+    collection_source = Column(String(16), nullable=False, default="apify")
+    competitor = relationship("DBCompetitor")
+
+
 class DBSubscription(Base):
     __tablename__ = "subscriptions"
 
