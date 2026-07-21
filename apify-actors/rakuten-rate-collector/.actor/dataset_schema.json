@@ -1,0 +1,16 @@
+{
+  "actorSpecification": 1,
+  "fields": {},
+  "views": {
+    "overview": {
+      "title": "Collected rate",
+      "transformation": {
+        "fields": ["ota", "propertyUrl", "checkIn", "checkOut", "adults", "nightlyPrice", "isFullyBooked", "availability", "collectedAt"]
+      },
+      "display": {
+        "component": "table",
+        "properties": {}
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "actorSpecification": 1,
+  "name": "jalan-rate-collector",
+  "title": "Jalan Best Available Rate Collector",
+  "description": "Collects the lowest available one-night JPY rate for one approved Jalan property URL.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "dockerfile": "../Dockerfile",
+  "readme": "../README.md",
+  "input": "./input_schema.json",
+  "output": "./output_schema.json",
+  "storages": {
+    "dataset": "./dataset_schema.json"
+  }
+}

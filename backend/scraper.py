@@ -34,17 +34,32 @@ class OTAScraper:
         self.settings = settings or get_settings()
 
     def extract_price(self, url: str, target_date: str, comp_id: int) -> ScrapeResult:
+        """Compatibility wrapper for a one-night collection."""
+        return self.extract_prices(url, [target_date], comp_id)[target_date]
+
+    def extract_prices(self, url: str, target_dates: list[str], comp_id: int) -> dict[str, ScrapeResult]:
+        """Collect a facility's requested stay dates in one approved Actor run."""
+        dates = list(dict.fromkeys(target_dates))
+        if not dates:
+            return {}
+        if len(dates) > 31:
+            raise DataCollectionError("At most 31 stay dates may be collected in one run")
         try:
-            return self._from_apify(url, target_date)
+            return self._from_apify(url, dates)
         except DataCollectionError:
             if self.settings.allow_simulated_data:
-                result = self._fallback_simulation(target_date, comp_id)
-                return ScrapeResult(*result, source="simulation")
+                return {
+                    target_date: ScrapeResult(*self._fallback_simulation(target_date, comp_id), source="simulation")
+                    for target_date in dates
+                }
             raise
 
-    def _from_apify(self, url: str, target_date: str) -> ScrapeResult:
+    def _from_apify(self, url: str, target_dates: list[str]) -> dict[str, ScrapeResult]:
         token = self.settings.apify_api_token
-        actor_id = self.settings.actor_for_url(url)
+        ota_source = self.settings.source_for_url(url)
+        if not ota_source or ota_source.status != "approved":
+            raise DataCollectionError("OTA collection is not approved for this source")
+        actor_id = ota_source.actor_id
         if not token or not actor_id:
             raise DataCollectionError("Apify token or OTA actor is not configured")
 
@@ -53,8 +68,7 @@ class OTAScraper:
             run = client.actor(actor_id).call(
                 run_input={
                     "startUrls": [{"url": url}],
-                    "checkIn": target_date,
-                    "checkOut": (dt.date.fromisoformat(target_date) + dt.timedelta(days=1)).isoformat(),
+                    "stayDates": target_dates,
                     "adults": 2,
                     "currency": "JPY",
                 }
@@ -65,7 +79,17 @@ class OTAScraper:
 
         if not items:
             raise DataCollectionError("Apify actor returned no offers")
-        return self._normalise_item(items[0])
+        results: dict[str, ScrapeResult] = {}
+        requested_dates = set(target_dates)
+        for item in items:
+            stay_date = item.get("checkIn")
+            if stay_date not in requested_dates or stay_date in results:
+                continue
+            results[stay_date] = self._normalise_item(item)
+        missing_dates = requested_dates - results.keys()
+        if missing_dates:
+            raise DataCollectionError("Apify actor did not return every requested stay date")
+        return results
 
     def _normalise_item(self, item: dict[str, Any]) -> ScrapeResult:
         sold_out = self._find_sold_out(item)

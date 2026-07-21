@@ -1,0 +1,50 @@
+{
+  "title": "Rakuten Travel rate collection",
+  "description": "Run at most twice daily for one approved Rakuten Travel facility. Multiple stay dates are collected in the same actor run.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startUrls": {
+      "title": "Rakuten Travel facility URL",
+      "description": "A single HTTPS URL on travel.rakuten.co.jp for a facility approved for use in this service.",
+      "type": "array",
+      "editor": "requestListSources",
+      "minItems": 1,
+      "maxItems": 1,
+      "prefill": [
+        {
+          "url": "https://travel.rakuten.co.jp/HOTEL/14138/14138.html"
+        }
+      ]
+    },
+    "stayDates": {
+      "title": "Stay dates",
+      "description": "One-night check-in dates in YYYY-MM-DD format. All dates are collected in one controlled actor run.",
+      "type": "array",
+      "editor": "stringList",
+      "minItems": 1,
+      "maxItems": 31,
+      "items": {
+        "type": "string",
+        "pattern": "^(\\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$"
+      }
+    },
+    "adults": {
+      "title": "Adults",
+      "description": "Number of adult guests used for the displayed rate.",
+      "type": "integer",
+      "editor": "number",
+      "default": 2,
+      "minimum": 1,
+      "maximum": 10
+    },
+    "currency": {
+      "title": "Currency",
+      "description": "Only JPY is supported by the Revenue Assistant integration.",
+      "type": "string",
+      "default": "JPY",
+      "enum": ["JPY"]
+    }
+  },
+  "required": ["startUrls", "stayDates"]
+}

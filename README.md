@@ -35,6 +35,8 @@ APIFY_ACTOR_RAKUTEN=
 
 Actorは `startUrls`、`checkIn`、`checkOut`、`adults`、`currency` を受け取り、データセットに宿泊料金（`price`、`pricePerNight`、`amount` 等）または満室状態を返すよう検証してください。OTAの規約とActorの出力仕様は導入前に確認が必要です。
 
+`OTA_STATUS_BOOKING`、`OTA_STATUS_AIRBNB`、`OTA_STATUS_JALAN`、`OTA_STATUS_RAKUTEN` はすべて初期値を `pending` とします。`approved` に明示変更したOTAだけがApifyを実行できます。顧客がURLを登録することと、OTAからデータ取得の許諾を得ることは別です。
+
 ## Supabase移行
 
 `DATABASE_URL` にSupabaseのPostgreSQL接続文字列を設定できます。パイロットから本番へ移行する際は、Supabaseのバックアップ、RLS、ユーザー／施設テナント分離を有効にし、SQLite互換の自動移行ではなくレビュー済みのDBマイグレーションを適用してください。
