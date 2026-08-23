@@ -53,7 +53,7 @@ function Add-SecretVersion([string]$Name, [string]$Value) {
 gcloud config set project $ProjectId
 gcloud services enable secretmanager.googleapis.com
 
-$databaseUrl = Read-SecretValue "Supabase Transaction pooler connection string"
+$databaseUrl = Read-SecretValue "Supabase Session pooler connection string (port 5432)"
 if ($databaseUrl.StartsWith("postgresql://")) {
   $databaseUrl = $databaseUrl.Replace("postgresql://", "postgresql+psycopg://")
 } elseif ($databaseUrl.StartsWith("postgres://")) {

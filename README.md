@@ -40,7 +40,7 @@ Actorは `startUrls`、`checkIn`、`checkOut`、`adults`、`currency` を受け�
 
 ## Supabase
 
-本番では `DATABASE_URL` にSupabaseのTransaction pooler接続文字列を設定します。公開スキーマの全テーブルでRLSを有効にし、ユーザー／施設のテナント分離を適用します。SQLiteと疑似データはローカルデモ専用で、本番起動時に拒否されます。
+本番では `DATABASE_URL` にSupabaseのSession pooler（port 5432）接続文字列を設定します。公開スキーマの全テーブルでRLSを有効にし、ユーザー／施設のテナント分離を適用します。SQLiteと疑似データはローカルデモ専用で、本番起動時に拒否されます。
 
 ## メール通知設定
 

@@ -6,7 +6,7 @@
 
 - 課金が有効なGoogle Cloudプロジェクト
 - Google Cloud CLIでのログイン
-- SupabaseのPostgreSQL接続文字列（Transaction pooler推奨）
+- SupabaseのPostgreSQL接続文字列（Session pooler、port 5432）
 - Apify API token
 - StripeのSecret key、Webhook signing secret、月額プランのPrice ID
 - ResendのAPI key、認証済み送信元メールアドレス
@@ -19,7 +19,7 @@ Secret Managerに次の5件を作成してください。値はGitHubやこの�
 - `revenavi-stripe-webhook-secret`
 - `revenavi-resend-api-key`
 
-PostgreSQL接続文字列はSQLAlchemy用に `postgresql+psycopg://...` で始めます。SupabaseのTransaction poolerを使う場合は、Dashboardの Connect 画面に表示される値を使用してください。
+PostgreSQL接続文字列はSQLAlchemy用に `postgresql+psycopg://...` で始めます。Cloud RunからはIPv4対応でPrepared Statement制約のないSession pooler（port 5432）を使用し、Dashboardの Connect 画面に表示される値を入力してください。
 
 秘密情報は次のスクリプトでマスク入力できます。値は画面、チャット、リポジトリへ表示されません。Webhookをまだ作成していない場合は、その入力だけEnterで進めます。
 
