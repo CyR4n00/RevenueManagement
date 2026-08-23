@@ -4,10 +4,13 @@ import App from './App';
 import axios from 'axios';
 
 jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+jest.mock('./supabase', () => ({ supabase: null, authIsConfigured: false }));
 
 test('renders app header', async () => {
-  mockedAxios.get.mockImplementation((url) => {
+  jest.spyOn(axios, 'get').mockImplementation((url) => {
+    if (url.includes('recommendations')) {
+      return Promise.resolve({ data: [] });
+    }
     if (url.includes('recommendation')) {
       return Promise.resolve({ data: { suggested_price: 10000, suggested_rank: 'C', reasoning: 'test' } });
     }
@@ -16,6 +19,6 @@ test('renders app header', async () => {
   await act(async () => {
     render(<App />);
   });
-  const headerElement = screen.getByText(/レベニューアシスタント/i);
+  const headerElement = screen.getByRole('heading', { name: '価格分析ダッシュボード' });
   expect(headerElement).toBeInTheDocument();
 });

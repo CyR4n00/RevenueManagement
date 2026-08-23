@@ -1,0 +1,12 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+logsBucket: gs://${PROJECT_ID}_cloudbuild/logs
+options:
+  logging: GCS_ONLY

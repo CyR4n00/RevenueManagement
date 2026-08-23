@@ -5,6 +5,13 @@ type Mode = 'password' | 'link';
 
 const redirectTo = () => `${window.location.origin}/`;
 
+const authErrorMessage = (message: string) => {
+  if (/failed to fetch|network request failed/i.test(message)) {
+    return '認証サーバーに接続できません。しばらく待ってから再読み込みしてください。';
+  }
+  return message;
+};
+
 export function AuthGate() {
   const [mode, setMode] = useState<Mode>('password');
   const [email, setEmail] = useState('');
@@ -23,10 +30,13 @@ export function AuthGate() {
     try {
       const { error: authError } = await operation();
       if (authError) {
-        setError(authError.message);
+        setError(authErrorMessage(authError.message));
         return;
       }
       setMessage(success);
+    } catch (caught) {
+      const detail = caught instanceof Error ? caught.message : 'Unknown authentication error';
+      setError(authErrorMessage(detail));
     } finally {
       setBusy(false);
     }
@@ -60,7 +70,7 @@ export function AuthGate() {
 
   return <main className="min-h-screen bg-slate-50 p-4 text-slate-800 md:p-8">
     <section className="mx-auto mt-10 max-w-md rounded-xl border bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-bold">Revenue Assistant</h1>
+      <h1 className="text-2xl font-bold">レベナビ</h1>
       <p className="mt-2 text-sm text-slate-600">メールアドレスで安全にログインできます。</p>
 
       <div className="mt-6 grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-sm font-semibold">

@@ -24,6 +24,9 @@ class ScrapeResult:
     price: int
     is_fully_booked: bool
     source: str
+    availability_status: str = "available"
+    remaining_rooms: int | None = None
+    availability_source: str = "inferred"
 
 
 class OTAScraper:
@@ -42,16 +45,21 @@ class OTAScraper:
         dates = list(dict.fromkeys(target_dates))
         if not dates:
             return {}
-        if len(dates) > 31:
-            raise DataCollectionError("At most 31 stay dates may be collected in one run")
+        if len(dates) > 90:
+            raise DataCollectionError("At most 90 stay dates may be collected in one run")
         try:
             return self._from_apify(url, dates)
         except DataCollectionError:
             if self.settings.allow_simulated_data:
-                return {
-                    target_date: ScrapeResult(*self._fallback_simulation(target_date, comp_id), source="simulation")
-                    for target_date in dates
-                }
+                results = {}
+                for target_date in dates:
+                    price, sold_out = self._fallback_simulation(target_date, comp_id)
+                    results[target_date] = ScrapeResult(
+                        price=price, is_fully_booked=sold_out, source="simulation",
+                        availability_status="sold_out" if sold_out else "available",
+                        availability_source="inferred",
+                    )
+                return results
             raise
 
     def _from_apify(self, url: str, target_dates: list[str]) -> dict[str, ScrapeResult]:
@@ -86,20 +94,60 @@ class OTAScraper:
             if stay_date not in requested_dates or stay_date in results:
                 continue
             results[stay_date] = self._normalise_item(item)
-        missing_dates = requested_dates - results.keys()
-        if missing_dates:
-            raise DataCollectionError("Apify actor did not return every requested stay date")
+        # Keep valid partial results. A 90-day Actor run can occasionally lose
+        # one request to a transient OTA timeout; discarding the other 89 days
+        # makes the dashboard look empty and forces an unnecessarily expensive
+        # full rerun. Missing dates remain visibly uncollected and are retried
+        # by the next scheduled sync.
+        if not results:
+            raise DataCollectionError("Apify actor did not return any requested stay date")
         return results
 
     def _normalise_item(self, item: dict[str, Any]) -> ScrapeResult:
         sold_out = self._find_sold_out(item)
+        remaining_rooms = self._remaining_rooms(item.get("remainingRooms"))
+        raw_status = str(item.get("availabilityStatus") or item.get("availability") or "unknown").lower()
+        status = raw_status if raw_status in {"available", "limited", "sold_out", "unknown"} else "unknown"
+        if remaining_rooms == 0 or sold_out:
+            sold_out, status = True, "sold_out"
+        elif status == "sold_out":
+            sold_out = True
+        availability_source = str(item.get("availabilitySource") or "inferred").lower()
+        if availability_source not in {"explicit_count", "symbol", "inferred", "unknown"}:
+            availability_source = "unknown"
         prices = list(self._find_prices(item))
         if sold_out and not prices:
-            return ScrapeResult(price=0, is_fully_booked=True, source="apify")
+            return ScrapeResult(
+                price=0, is_fully_booked=True, source="apify",
+                availability_status="sold_out", remaining_rooms=remaining_rooms,
+                availability_source=availability_source,
+            )
         valid_prices = [price for price in prices if 3_000 <= price <= 1_000_000]
         if not valid_prices:
             raise DataCollectionError("Apify actor response does not contain a valid nightly price")
-        return ScrapeResult(price=min(valid_prices), is_fully_booked=False, source="apify")
+        if status in {"unknown", "sold_out"}:
+            status = "available"
+            availability_source = "inferred"
+        return ScrapeResult(
+            price=min(valid_prices), is_fully_booked=False, source="apify",
+            availability_status=status, remaining_rooms=remaining_rooms,
+            availability_source=availability_source,
+        )
+
+    @staticmethod
+    def _remaining_rooms(value: Any) -> int | None:
+        if isinstance(value, bool) or value is None:
+            return None
+        if isinstance(value, (int, float)):
+            parsed = int(value)
+        elif isinstance(value, str):
+            digits = re.sub(r"[^0-9]", "", value)
+            if not digits:
+                return None
+            parsed = int(digits)
+        else:
+            return None
+        return parsed if 0 <= parsed <= 10_000 else None
 
     def _find_sold_out(self, value: Any) -> bool:
         if isinstance(value, dict):

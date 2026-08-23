@@ -1,15 +1,16 @@
-# Revenue Assistant
+# レベナビ
 
-旅館・民泊向けの競合料金モニタリング、ガードレール付き価格提案、CSV出力を提供するレベニューマネジメントMVPです。営業デモからパイロット導入へ進めるため、実データ連携と運用上の安全策を備えています。
+旅館・民泊向けの競合料金モニタリングと、ガードレール付き参考ランクを提供するレベニューマネジメントSaaSです。営業デモからパイロット導入へ進めるため、実データ連携と運用上の安全策を備えています。
 
 ## 提供機能
 
 - **Apify経由のOTAデータ取得**：Booking.com、Airbnb、じゃらん、楽天トラベル向けに、OTAごとに検証済みのActorを設定します。アプリ自身はOTAを直接スクレイピングしません。
 - **レベニュータワー**：競合3施設程度の前日比を、上昇（赤）・下落（青）・満室（グレー）で一覧化します。
-- **価格ガードレール**：最低・最高価格を必ず適用し、A〜Dランクと価格を提案します。
-- **LINE Messaging API通知**：大幅な値動き・満室を通知します。LINE Notifyは利用しません。
-- **PMS CSV出力**：標準CSVを提供します。ねっぱん！／手間いらず向けは、導入先の公式サンプルCSVをもとに検証済みプロファイルを追加する方式です。
+- **価格ガードレール**：最低・最高価格を必ず適用し、施設が設定したA〜F等の価格表から参考ランクを表示します。
+- **メール通知**：大幅な値動き・部屋なしを、確認済みのログインメールへ重複なく通知します。配信停止は施設設定から切り替えられます。
 - **Stripe Billing**：Stripe Checkoutによるサブスクリプション開始と、署名検証済みWebhookによる契約状態の同期を備えます。
+- **表示期間**：通常プランは3か月／6か月、アップグレードプランは1年間を表示できます。期間上限は画面だけでなくAPI側でも強制します。
+- **低負荷の将来データ補完**：1日2回の許諾範囲内で、1回目は直近期間、2回目は将来31日分をローテーション取得します。長期カレンダーを一度に大量取得しません。
 
 ## ローカル起動
 
@@ -37,9 +38,18 @@ Actorは `startUrls`、`checkIn`、`checkOut`、`adults`、`currency` を受け�
 
 `OTA_STATUS_BOOKING`、`OTA_STATUS_AIRBNB`、`OTA_STATUS_JALAN`、`OTA_STATUS_RAKUTEN` はすべて初期値を `pending` とします。`approved` に明示変更したOTAだけがApifyを実行できます。顧客がURLを登録することと、OTAからデータ取得の許諾を得ることは別です。
 
-## Supabase移行
+## Supabase
 
-`DATABASE_URL` にSupabaseのPostgreSQL接続文字列を設定できます。パイロットから本番へ移行する際は、Supabaseのバックアップ、RLS、ユーザー／施設テナント分離を有効にし、SQLite互換の自動移行ではなくレビュー済みのDBマイグレーションを適用してください。
+本番では `DATABASE_URL` にSupabaseのTransaction pooler接続文字列を設定します。公開スキーマの全テーブルでRLSを有効にし、ユーザー／施設のテナント分離を適用します。SQLiteと疑似データはローカルデモ専用で、本番起動時に拒否されます。
+
+## メール通知設定
+
+通知先は、Supabase Authで確認済みのログインメールから自動設定されます。配信にはResendのAPIキーと、認証済み送信ドメインのFromアドレスを本番シークレットとして設定します。
+
+```text
+RESEND_API_KEY=re_...
+ALERT_FROM_EMAIL=レベナビ <alerts@example.com>
+```
 
 ## Stripe設定
 
@@ -50,6 +60,7 @@ FRONTEND_APP_URL=https://app.example.com
 STRIPE_SECRET_KEY=sk_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_PRICE_ID_PRO=price_...
+STRIPE_PRICE_ID_UPGRADE=price_...
 ```
 
 Stripe DashboardのWebhook Endpointには `POST /webhooks/stripe` を登録し、少なくとも `checkout.session.completed`、`customer.subscription.updated`、`customer.subscription.deleted` を送信してください。Webhook署名が正しくないイベントは拒否されます。Checkoutはサブスクリプション用のPrice IDのみをサーバー側で使うため、クライアントから価格を差し替えられません。
@@ -57,5 +68,5 @@ Stripe DashboardのWebhook Endpointには `POST /webhooks/stripe` を登録し�
 ## 運用時の注意
 
 - `.env` はGit管理しません。デプロイ先のSecret Managerまたは環境変数を利用してください。
-- 本番ではCORSを正規のフロントエンドURLだけに制限し、`ADMIN_API_KEY` を設定します。
-- 現行の「ねっぱん！／手間いらず」CSVは未検証テンプレートです。各社の公式仕様・対象顧客の読み込みサンプルで受入テスト後に `verified` としてください。
+- 本番ではReactとAPIを同一Cloud Runサービスで配信し、CORSをその公開URLだけに制限します。
+- CSV／サイトコントローラー連携は将来機能です。公式フォーマットと導入施設のサンプルを入手してから別途実装します。

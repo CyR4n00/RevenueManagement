@@ -15,7 +15,11 @@ class StripeBilling:
 
     @property
     def configured(self) -> bool:
-        return bool(self.settings.stripe_secret_key and self.settings.stripe_webhook_secret and self.settings.stripe_price_id_pro)
+        webhook_ready = (
+            self.settings.stripe_webhook_secret.startswith("whsec_")
+            and self.settings.stripe_webhook_secret != "whsec_pending_configuration"
+        )
+        return bool(self.settings.stripe_secret_key and webhook_ready and self.settings.stripe_price_id_pro)
 
     def _configure(self) -> None:
         if not self.configured:

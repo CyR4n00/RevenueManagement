@@ -62,12 +62,13 @@ class Settings:
     ota_status_jalan: str
     ota_status_rakuten: str
     allow_simulated_data: bool
-    line_channel_access_token: str
-    line_user_id: str
+    resend_api_key: str
+    alert_from_email: str
     frontend_app_url: str
     stripe_secret_key: str
     stripe_webhook_secret: str
     stripe_price_id_pro: str
+    stripe_price_id_upgrade: str
     scheduler_enabled: bool
     demo_sync_interval_minutes: int
     daily_sync_hours: tuple[int, ...]
@@ -119,15 +120,16 @@ def get_settings() -> Settings:
         ota_status_jalan=_ota_status("OTA_STATUS_JALAN"),
         ota_status_rakuten=_ota_status("OTA_STATUS_RAKUTEN"),
         allow_simulated_data=_bool("ALLOW_SIMULATED_DATA", environment == "demo"),
-        line_channel_access_token=os.getenv("LINE_CHANNEL_ACCESS_TOKEN", ""),
-        line_user_id=os.getenv("LINE_USER_ID", ""),
+        resend_api_key=os.getenv("RESEND_API_KEY", ""),
+        alert_from_email=os.getenv("ALERT_FROM_EMAIL", ""),
         frontend_app_url=os.getenv("FRONTEND_APP_URL", origins[0]).rstrip("/"),
         stripe_secret_key=os.getenv("STRIPE_SECRET_KEY", ""),
         stripe_webhook_secret=os.getenv("STRIPE_WEBHOOK_SECRET", ""),
         stripe_price_id_pro=os.getenv("STRIPE_PRICE_ID_PRO", ""),
+        stripe_price_id_upgrade=os.getenv("STRIPE_PRICE_ID_UPGRADE", ""),
         scheduler_enabled=_bool("SCHEDULER_ENABLED", True),
         demo_sync_interval_minutes=max(5, int(os.getenv("DEMO_SYNC_INTERVAL_MINUTES", "30"))),
         daily_sync_hours=_sync_hours(),
         daily_sync_minute=int(os.getenv("DAILY_SYNC_MINUTE", "0")),
-        sync_lookahead_days=max(1, min(31, int(os.getenv("SYNC_LOOKAHEAD_DAYS", "7")))),
+        sync_lookahead_days=max(1, min(90, int(os.getenv("SYNC_LOOKAHEAD_DAYS", "90")))),
     )

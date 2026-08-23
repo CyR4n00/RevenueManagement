@@ -1,4 +1,4 @@
-"""LINE Messaging API notification adapter (LINE Notify was discontinued)."""
+"""Transactional email delivery for verified account alert recipients."""
 
 import logging
 
@@ -9,30 +9,43 @@ from settings import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 
-class LineMessagingNotifier:
-    endpoint = "https://api.line.me/v2/bot/message/push"
+class EmailNotifier:
+    endpoint = "https://api.resend.com/emails"
 
     def __init__(self, settings: Settings | None = None):
         self.settings = settings or get_settings()
 
     @property
     def configured(self) -> bool:
-        return bool(self.settings.line_channel_access_token and self.settings.line_user_id)
+        return bool(
+            self.settings.resend_api_key
+            and self.settings.alert_from_email
+        )
 
-    def send_message(self, message: str) -> bool:
+    def send_alerts(self, recipient: str, facility_name: str, messages: list[str]) -> bool:
         if not self.configured:
-            logger.info("LINE Messaging API is not configured; notification was skipped")
+            logger.info("Email delivery is not configured; notification was skipped")
+            return False
+        if not recipient or not messages:
             return False
         response = requests.post(
             self.endpoint,
-            headers={"Authorization": f"Bearer {self.settings.line_channel_access_token}"},
-            json={"to": self.settings.line_user_id, "messages": [{"type": "text", "text": message[:5000]}]},
+            headers={
+                "Authorization": f"Bearer {self.settings.resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": self.settings.alert_from_email,
+                "to": [recipient],
+                "subject": f"【レベナビ】{facility_name}の価格変動アラート",
+                "text": "レベナビで価格変動を検知しました。\n\n" + "\n".join(messages),
+            },
             timeout=10,
         )
         if response.ok:
             return True
-        logger.warning("LINE Messaging API rejected notification: %s", response.status_code)
+        logger.warning("Email provider rejected notification: %s", response.status_code)
         return False
 
 
-notifier_service = LineMessagingNotifier()
+notifier_service = EmailNotifier()

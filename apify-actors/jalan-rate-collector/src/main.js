@@ -5,7 +5,7 @@ const OTA = {
     key: 'jalan',
     name: 'Jalan',
     allowedHosts: ['www.jalan.net', 'jalan.net'],
-    soldOutPattern: /(満室|空室なし|ご予約いただけません|予約できません|sold\s*out|no\s*availability)/i,
+    soldOutPattern: /(満室|空室なし|ご予約いただけません|予約できません|該当するプランはありません|sold\s*out|no\s*availability)/i,
 };
 
 const DATE_SELECTORS = {
@@ -40,8 +40,8 @@ function asDate(value, name) {
 }
 
 function asStayDates(values) {
-    if (!Array.isArray(values) || values.length < 1 || values.length > 31) {
-        throw new Error('stayDates must contain between 1 and 31 dates');
+    if (!Array.isArray(values) || values.length < 1 || values.length > 90) {
+        throw new Error('stayDates must contain between 1 and 90 dates');
     }
     const dates = [...new Set(values.map((value) => asDate(value, 'stayDates item')))];
     if (dates.length !== values.length) throw new Error('stayDates must not contain duplicates');
@@ -63,15 +63,72 @@ function priceCandidates(text) {
         .filter((value) => Number.isFinite(value) && value >= 3_000 && value <= 1_000_000);
 }
 
-async function fillFirstVisible(page, selectors, value) {
+function normaliseDigits(value) {
+    return value.replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xFEE0));
+}
+
+async function extractAvailabilitySignal(page, bodyText, nightlyPrice, isFullyBooked) {
+    const inventorySelector = '[data-testid*="availability" i], [class*="stock" i], [class*="remain" i], [class*="vacan" i], [aria-label*="残"], [title*="残"]';
+    const inventoryText = (await page.locator(inventorySelector).allTextContents().catch(() => [])).join(' ');
+    const roomCounts = [...normaliseDigits(bodyText).matchAll(/(?:残り|あと|残室)\s*(\d+)\s*室/g)]
+        .map((match) => Number.parseInt(match[1], 10))
+        .filter((value) => Number.isInteger(value) && value >= 0 && value <= 10_000);
+    const remainingRooms = roomCounts.length ? Math.min(...roomCounts) : null;
+    if (isFullyBooked || remainingRooms === 0) {
+        return { status: 'sold_out', remainingRooms, source: remainingRooms === 0 ? 'explicit_count' : 'inferred' };
+    }
+    if (remainingRooms !== null) {
+        return { status: remainingRooms <= 3 ? 'limited' : 'available', remainingRooms, source: 'explicit_count' };
+    }
+    if (/(残りわずか|残室わずか|空室わずか)/i.test(bodyText) || /(^|\s)[△▲](\s|$)/.test(inventoryText)) {
+        return { status: 'limited', remainingRooms: null, source: 'symbol' };
+    }
+    if (/(^|\s)[×✕](\s|$)/.test(inventoryText)) {
+        return { status: 'sold_out', remainingRooms: null, source: 'symbol' };
+    }
+    if (/(^|\s)[○◯](\s|$)/.test(inventoryText)) {
+        return { status: 'available', remainingRooms: null, source: 'symbol' };
+    }
+    return { status: nightlyPrice === null ? 'unknown' : 'available', remainingRooms: null, source: nightlyPrice === null ? 'unknown' : 'inferred' };
+}
+
+
+async function submitJalanSearch(page, checkIn, adults) {
+    const form = page.locator('form[action*="uww3101.do"]').first();
+    if (!await form.count()) return false;
+    const [year, month, day] = checkIn.split('-');
+    await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30_000 }),
+        form.evaluate((element, values) => {
+            const setValue = (name, value) => {
+                const field = element.querySelector(`[name="${name}"]`);
+                if (field) field.value = value;
+            };
+            setValue('stayYear', values.year);
+            setValue('stayMonth', values.month);
+            setValue('stayDay', values.day);
+            setValue('stayCount', '1');
+            setValue('dateUndecided', '0');
+            setValue('roomCount', '1');
+            setValue('adultNum', String(values.adults));
+            setValue('roomCrack', `${values.adults}${'0'.repeat(5)}`);
+            HTMLFormElement.prototype.submit.call(element);
+        }, { year, month, day, adults }),
+    ]);
+    return true;
+}
+
+async function fillFirstVisible(page, selectors, value, calendarAlreadyOpen = false) {
     for (const selector of selectors) {
         const locator = page.locator(selector).first();
         if (await locator.count() && await locator.isVisible().catch(() => false)) {
             if (await locator.getAttribute('readonly') !== null) {
-                await page.keyboard.press('Escape').catch(() => undefined);
-                await locator.click();
-                await page.waitForTimeout(300);
                 const calendarDay = page.locator(`[data-time="${Date.parse(`${value}T00:00:00Z`)}"]:not(.not-available)`).first();
+                if (!calendarAlreadyOpen || !await calendarDay.isVisible().catch(() => false)) {
+                    await page.keyboard.press('Escape').catch(() => undefined);
+                    await locator.click({ timeout: 5_000 });
+                    await page.waitForTimeout(300);
+                }
                 if (!await calendarDay.count() || !await calendarDay.isVisible().catch(() => false)) {
                     log.warning('Requested date is not selectable in the calendar', { selector, value });
                     return false;
@@ -124,15 +181,11 @@ async function submitAvailabilitySearch(page) {
     return false;
 }
 
-async function extractRate(page) {
-    const selector = '[data-testid*="price" i], [class*="price" i], [id*="price" i], [class*="rate" i], [id*="rate" i]';
-    const locator = page.locator(selector);
-    const focusedText = await locator.allTextContents();
-    const focusedPrices = priceCandidates(focusedText.join('\n'));
-    if (focusedPrices.length) return Math.min(...focusedPrices);
-    const bodyText = await page.locator('body').innerText();
-    const allPrices = priceCandidates(bodyText);
-    return allPrices.length ? Math.min(...allPrices) : null;
+async function extractRate(page, adults) {
+    const totals = priceCandidates((await page.locator('.p-searchResultItem__total').allTextContents()).join('\n'));
+    if (totals.length) return Math.min(...totals);
+    const perPerson = priceCandidates((await page.locator('.p-searchResultItem__perPerson').allTextContents()).join('\n'));
+    return perPerson.length ? Math.min(...perPerson) * adults : null;
 }
 
 await Actor.main(async () => {
@@ -145,54 +198,60 @@ try {
     let collectedResults = 0;
 
     const crawler = new PlaywrightCrawler({
-        maxRequestsPerCrawl: 1,
-        maxConcurrency: 1,
+        // One independent page per stay date keeps a 90-day collection below
+        // the Actor run timeout. Three concurrent pages is intentionally
+        // conservative toward the approved OTA while avoiding the former
+        // ten-minute sequential timeout.
+        maxRequestsPerCrawl: stayDates.length,
+        maxConcurrency: 3,
         maxRequestRetries: 0,
         requestHandlerTimeoutSecs: 90,
         launchContext: { launchOptions: { headless: true } },
         async requestHandler({ page, request }) {
-            // PlaywrightCrawler already performed the sole navigation for this run.
-            await page.waitForTimeout(1_000);
-            let adultsSet = false;
-            for (const checkIn of stayDates) {
-                const checkOut = nextDate(checkIn);
-                const checkInSet = await fillFirstVisible(page, DATE_SELECTORS.checkIn, checkIn);
-                const checkOutSet = await fillFirstVisible(page, DATE_SELECTORS.checkOut, checkOut);
-                adultsSet = adultsSet || await setAdultCount(page, adults);
-                const submitted = (checkInSet || checkOutSet || adultsSet) ? await submitAvailabilitySearch(page) : false;
-                await page.waitForTimeout(1_000);
+            const checkIn = request.userData.checkIn;
+            const checkOut = nextDate(checkIn);
+            await page.waitForTimeout(300);
+            const submitted = await submitJalanSearch(page, checkIn, adults);
+            await page.waitForTimeout(300);
 
-                const bodyText = await page.locator('body').innerText();
-                const nightlyPrice = await extractRate(page);
-                const isFullyBooked = nightlyPrice === null && OTA.soldOutPattern.test(bodyText);
-                if (nightlyPrice === null && !isFullyBooked) {
-                    log.warning('No rate result was detected', {
-                        finalUrl: page.url(),
-                        title: await page.title(),
-                        dateControls: { checkIn: checkInSet, checkOut: checkOutSet, adults: adultsSet, submitted },
-                        textPreview: bodyText.replaceAll(/\s+/g, ' ').slice(0, 500),
-                    });
-                    throw new Error('No standard JPY availability result was found. Confirm the property URL and date-control selectors.');
-                }
-                await Actor.pushData({
-                    ota: OTA.key,
-                    propertyUrl: startUrl,
+            const bodyText = await page.locator('body').innerText();
+            const nightlyPrice = await extractRate(page, adults);
+            const isFullyBooked = nightlyPrice === null && OTA.soldOutPattern.test(bodyText);
+            const availabilitySignal = await extractAvailabilitySignal(page, bodyText, nightlyPrice, isFullyBooked);
+            if (nightlyPrice === null && availabilitySignal.status === 'unknown') {
+                log.warning('No rate result was detected', {
                     finalUrl: page.url(),
-                    checkIn,
-                    checkOut,
-                    adults,
-                    currency: 'JPY',
-                    nightlyPrice,
-                    isFullyBooked,
-                    availability: isFullyBooked ? 'sold_out' : 'available',
-                    dateControlsDetected: { checkIn: checkInSet, checkOut: checkOutSet, adults: adultsSet, submitted },
-                    collectedAt: new Date().toISOString(),
+                    title: await page.title(),
+                    dateControls: { formSubmitted: submitted, adults },
+                    textPreview: bodyText.replaceAll(/\s+/g, ' ').slice(0, 500),
                 });
-                collectedResults += 1;
+                throw new Error('No standard JPY availability result was found. Confirm the property URL and date-control selectors.');
             }
+            await Actor.pushData({
+                ota: OTA.key,
+                propertyUrl: startUrl,
+                finalUrl: page.url(),
+                checkIn,
+                checkOut,
+                adults,
+                currency: 'JPY',
+                nightlyPrice,
+                isFullyBooked: availabilitySignal.status === 'sold_out',
+                availability: availabilitySignal.status,
+                availabilityStatus: availabilitySignal.status,
+                remainingRooms: availabilitySignal.remainingRooms,
+                availabilitySource: availabilitySignal.source,
+                dateControlsDetected: { formSubmitted: submitted, adults },
+                collectedAt: new Date().toISOString(),
+            });
+            collectedResults += 1;
         },
     });
-    await crawler.run([{ url: startUrl }]);
+    await crawler.run(stayDates.map((checkIn) => ({
+        url: startUrl,
+        uniqueKey: `${startUrl}::${checkIn}`,
+        userData: { checkIn },
+    })));
     if (collectedResults !== stayDates.length) throw new Error('The property page did not yield every requested rate result');
 } catch (error) {
     log.error(`Rate collection failed: ${error.message}`);

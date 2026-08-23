@@ -23,7 +23,7 @@
       "type": "array",
       "editor": "stringList",
       "minItems": 1,
-      "maxItems": 31,
+      "maxItems": 90,
       "items": {
         "type": "string",
         "pattern": "^(\\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$"

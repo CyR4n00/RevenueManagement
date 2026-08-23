@@ -5,7 +5,7 @@
     "overview": {
       "title": "Collected rate",
       "transformation": {
-        "fields": ["ota", "propertyUrl", "checkIn", "checkOut", "adults", "nightlyPrice", "isFullyBooked", "availability", "collectedAt"]
+        "fields": ["ota", "propertyUrl", "checkIn", "checkOut", "adults", "nightlyPrice", "availabilityStatus", "remainingRooms", "availabilitySource", "isFullyBooked", "collectedAt"]
       },
       "display": {
         "component": "table",
