@@ -4,12 +4,49 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not (Get-Command gcloud -ErrorAction SilentlyContinue)) {
-  $bundledGcloud = "C:\Users\zerga\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin"
-  if (Test-Path (Join-Path $bundledGcloud "gcloud.cmd")) {
-    $env:PATH = "$bundledGcloud;$env:PATH"
-  } else {
+$gcloudCommand = Get-Command gcloud.cmd -ErrorAction SilentlyContinue
+if (-not $gcloudCommand) {
+  $gcloudCommand = Get-Command gcloud -ErrorAction SilentlyContinue
+}
+if ($gcloudCommand) {
+  $gcloudPath = $gcloudCommand.Source
+} else {
+  $bundledGcloudPath = "C:\Users\zerga\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
+  if (-not (Test-Path $bundledGcloudPath)) {
     throw "Google Cloud CLI (gcloud) is required."
+  }
+  $gcloudPath = $bundledGcloudPath
+}
+
+function Invoke-GcloudProcess([string]$Arguments, [string]$StandardInput = $null, [switch]$AllowFailure) {
+  $startInfo = [Diagnostics.ProcessStartInfo]::new()
+  if ([IO.Path]::GetExtension($gcloudPath) -ieq ".cmd") {
+    $startInfo.FileName = $env:ComSpec
+    $startInfo.Arguments = '/d /s /c ""{0}" {1}"' -f $gcloudPath, $Arguments
+  } else {
+    $startInfo.FileName = $gcloudPath
+    $startInfo.Arguments = $Arguments
+  }
+  $startInfo.UseShellExecute = $false
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  $startInfo.RedirectStandardInput = $null -ne $StandardInput
+
+  $process = [Diagnostics.Process]::Start($startInfo)
+  if ($null -ne $StandardInput) {
+    $process.StandardInput.Write($StandardInput)
+    $process.StandardInput.Close()
+  }
+  $standardOutput = $process.StandardOutput.ReadToEnd()
+  $standardError = $process.StandardError.ReadToEnd()
+  $process.WaitForExit()
+
+  if ($process.ExitCode -ne 0 -and -not $AllowFailure) {
+    throw "Google Cloud CLI failed: $standardError"
+  }
+  return [PSCustomObject]@{
+    ExitCode = $process.ExitCode
+    Output = $standardOutput.Trim()
   }
 }
 
@@ -24,34 +61,15 @@ function Read-SecretValue([string]$Prompt) {
 }
 
 function Add-SecretVersion([string]$Name, [string]$Value) {
-  $exists = gcloud secrets describe $Name --project $ProjectId --format="value(name)" 2>$null
-  if (-not $exists) {
-    gcloud secrets create $Name --project $ProjectId --replication-policy automatic
+  $describe = Invoke-GcloudProcess "secrets describe $Name --project $ProjectId --format=value(name)" -AllowFailure
+  if ($describe.ExitCode -ne 0) {
+    $null = Invoke-GcloudProcess "secrets create $Name --project $ProjectId --replication-policy=automatic"
   }
-
-  $arguments = @(
-    "secrets", "versions", "add", $Name,
-    "--project", $ProjectId,
-    "--data-file=-"
-  )
-  $startInfo = [Diagnostics.ProcessStartInfo]::new()
-  $startInfo.FileName = "gcloud"
-  $startInfo.UseShellExecute = $false
-  $startInfo.RedirectStandardInput = $true
-  foreach ($argument in $arguments) {
-    [void]$startInfo.ArgumentList.Add($argument)
-  }
-  $process = [Diagnostics.Process]::Start($startInfo)
-  $process.StandardInput.Write($Value)
-  $process.StandardInput.Close()
-  $process.WaitForExit()
-  if ($process.ExitCode -ne 0) {
-    throw "Failed to update Secret Manager secret: $Name"
-  }
+  $null = Invoke-GcloudProcess "secrets versions add $Name --project $ProjectId --data-file=-" -StandardInput $Value
 }
 
-gcloud config set project $ProjectId
-gcloud services enable secretmanager.googleapis.com
+$null = Invoke-GcloudProcess "config set project $ProjectId"
+$null = Invoke-GcloudProcess "services enable secretmanager.googleapis.com --project $ProjectId"
 
 $databaseUrl = Read-SecretValue "Supabase Session pooler connection string (port 5432)"
 if ($databaseUrl.StartsWith("postgresql://")) {
@@ -63,8 +81,8 @@ if (-not $databaseUrl.StartsWith("postgresql+psycopg://")) {
   throw "The database connection string must be a PostgreSQL URI."
 }
 
-$apifyVersion = gcloud secrets versions list "revenavi-apify-token" --project $ProjectId --filter="state=ENABLED" --limit=1 --format="value(name)" 2>$null
-if (-not $apifyVersion) {
+$apifyVersionResult = Invoke-GcloudProcess "secrets versions list revenavi-apify-token --project $ProjectId --filter=state=ENABLED --limit=1 --format=value(name)" -AllowFailure
+if ($apifyVersionResult.ExitCode -ne 0 -or -not $apifyVersionResult.Output) {
   $apifyToken = Read-SecretValue "Apify API token"
   if (-not $apifyToken.StartsWith("apify_api_")) {
     throw "The Apify token format is invalid."
