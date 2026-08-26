@@ -5,9 +5,25 @@ type Mode = 'password' | 'link';
 
 const redirectTo = () => `${window.location.origin}/`;
 
-const authErrorMessage = (message: string) => {
+export const authErrorMessage = (message: string) => {
   if (/failed to fetch|network request failed/i.test(message)) {
     return '認証サーバーに接続できません。しばらく待ってから再読み込みしてください。';
+  }
+  const retryAfter = message.match(/security purposes.*after\s+(\d+)\s+seconds?/i);
+  if (retryAfter) {
+    return `セキュリティ保護のため、あと${retryAfter[1]}秒待ってから再度お試しください。`;
+  }
+  if (/email rate limit exceeded|rate limit/i.test(message)) {
+    return 'メールの送信回数が上限に達しました。しばらく待ってから再度お試しください。';
+  }
+  if (/invalid login credentials/i.test(message)) {
+    return 'メールアドレスまたはパスワードが正しくありません。';
+  }
+  if (/email not confirmed/i.test(message)) {
+    return 'メールアドレスの確認が完了していません。確認メール内のリンクを押してください。';
+  }
+  if (/user already registered/i.test(message)) {
+    return 'このメールアドレスはすでに登録されています。ログインをお試しください。';
   }
   return message;
 };

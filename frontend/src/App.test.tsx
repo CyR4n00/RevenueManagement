@@ -4,7 +4,11 @@ import App from './App';
 import axios from 'axios';
 
 jest.mock('axios');
-jest.mock('./supabase', () => ({ supabase: null, authIsConfigured: false }));
+jest.mock('./supabase', () => ({
+  supabase: null,
+  authIsConfigured: false,
+  runtimeConfig: { apiUrl: '' },
+}));
 
 test('renders app header', async () => {
   jest.spyOn(axios, 'get').mockImplementation((url) => {
