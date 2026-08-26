@@ -27,10 +27,10 @@ async def require_current_user(authorization: str | None = Header(default=None))
         return CurrentUser(id="demo-user", email="demo@example.invalid")
 
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in is required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ログインが必要です")
     token = authorization.removeprefix("Bearer ").strip()
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in is required")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ログインが必要です")
 
     try:
         async with httpx.AsyncClient(timeout=5) as client:
@@ -39,13 +39,13 @@ async def require_current_user(authorization: str | None = Header(default=None))
                 headers={"Authorization": f"Bearer {token}", "apikey": settings.supabase_publishable_key},
             )
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authentication service is unavailable") from exc
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="現在ログイン機能を利用できません") from exc
 
     if response.status_code != status.HTTP_200_OK:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Your sign-in session is invalid or expired")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ログインの有効期限が切れました。再度ログインしてください")
     payload = response.json()
     user_id = payload.get("id")
     email = payload.get("email")
     if not isinstance(user_id, str) or not isinstance(email, str):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication response is invalid")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ログイン情報を確認できませんでした")
     return CurrentUser(id=user_id, email=email)

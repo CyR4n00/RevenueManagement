@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { supabase } from './supabase';
+import { userFacingErrorMessage } from './errorMessages';
 
 type Mode = 'password' | 'link';
 
@@ -25,7 +26,7 @@ export const authErrorMessage = (message: string) => {
   if (/user already registered/i.test(message)) {
     return 'このメールアドレスはすでに登録されています。ログインをお試しください。';
   }
-  return message;
+  return userFacingErrorMessage(message, 'ログイン処理で問題が起きました。入力内容を確認して、もう一度お試しください。');
 };
 
 export function AuthGate() {

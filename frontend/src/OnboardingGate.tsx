@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import axios from 'axios';
+import { userFacingErrorMessage } from './errorMessages';
 
 interface Facility { id: string; name: string; address?: string; base_price: number; min_price: number; max_price: number; }
 interface OnboardingStatus { subscription_status: string; onboarding_complete: boolean; facility?: Facility | null; }
@@ -63,7 +64,7 @@ export function OnboardingGate({ apiBase, accessToken, onComplete }: { apiBase: 
       setError('ランク価格はAから順に、前のランクより低い金額を入力してください。'); return;
     }
     if (!completedCompetitors.length || completedCompetitors.some(item => !item.name.trim() || !item.url.trim())) {
-      setError('比較する競合施設の名称とOTA URLを、少なくとも1件入力してください。'); return;
+      setError('比較する宿の名前と予約サイトURLを、少なくとも1件入力してください。'); return;
     }
     setBusy(true); setError('');
     try {
@@ -78,7 +79,7 @@ export function OnboardingGate({ apiBase, accessToken, onComplete }: { apiBase: 
       }, { headers });
       onComplete();
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.detail || '保存できませんでした。URLとランク価格を確認してください。');
+      setError(userFacingErrorMessage(requestError, '保存できませんでした。予約サイトのURLとランク価格を確認してください。'));
     } finally { setBusy(false); }
   };
 

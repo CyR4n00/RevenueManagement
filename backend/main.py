@@ -163,7 +163,7 @@ def _parse_date(value: str) -> dt.date:
     try:
         return dt.date.fromisoformat(value)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Date must be YYYY-MM-DD") from exc
+        raise HTTPException(status_code=422, detail="日付の形式が正しくありません") from exc
 
 
 def _canonical_url(url: str) -> str:
@@ -175,12 +175,12 @@ def _canonical_url(url: str) -> str:
 def _validate_ota_url(url: str) -> OtaSourceRuntime:
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname:
-        raise HTTPException(status_code=422, detail="Competitor URL must use HTTPS")
+        raise HTTPException(status_code=422, detail="予約サイトのURLはhttps://から始まるものを入力してください")
     source = settings.source_for_url(url)
     if source is None:
-        raise HTTPException(status_code=422, detail="Only configured OTA domains are allowed")
+        raise HTTPException(status_code=422, detail="現在対応している予約サイトのURLを入力してください")
     if source.status != "approved" or not source.actor_id or not settings.apify_api_token:
-        raise HTTPException(status_code=422, detail=f"{source.name} is not available for collection yet")
+        raise HTTPException(status_code=422, detail=f"{source.name}は現在データ取得の準備中です")
     return source
 
 
@@ -194,12 +194,12 @@ def _organization_for_user(db: Session, user: CurrentUser) -> models.DBOrganizat
 def _require_organization(db: Session, user: CurrentUser, write: bool = False) -> models.DBOrganization:
     membership = db.query(models.DBOrganizationMember).filter_by(user_id=user.id).first()
     if membership is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Account setup has not started")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="利用開始の設定がまだ始まっていません")
     if write and membership.role not in {"owner", "admin"}:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only an owner or administrator can change this facility")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="この設定を変更できる権限がありません")
     organization = db.query(models.DBOrganization).filter_by(id=membership.organization_id).first()
     if organization is None:
-        raise HTTPException(status_code=404, detail="Organization not found")
+        raise HTTPException(status_code=404, detail="施設の契約情報が見つかりませんでした")
     return organization
 
 
@@ -210,7 +210,16 @@ def _subscription_for_organization(db: Session, organization_id: str) -> models.
 def _has_active_subscription(subscription: models.DBSubscription | None) -> bool:
     # No free trial is provisioned.  The extra status is retained for safe
     # handling of legacy Stripe data but is never created by this application.
-    return settings.demo_bypass_billing or bool(subscription and subscription.status in {"active", "trialing"})
+    if settings.demo_bypass_billing:
+        return True
+    if not subscription or subscription.status not in {"active", "trialing"}:
+        return False
+    if subscription.current_period_end is None:
+        return True
+    period_end = subscription.current_period_end
+    if period_end.tzinfo is None:
+        period_end = period_end.replace(tzinfo=dt.timezone.utc)
+    return period_end > dt.datetime.now(dt.timezone.utc)
 
 
 def _subscription_plan(subscription: models.DBSubscription | None) -> tuple[str, int]:
@@ -232,17 +241,17 @@ def _enforce_horizon(db: Session, user: CurrentUser, days: int) -> None:
     if days > maximum:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Your current plan supports a maximum horizon of {maximum} days",
+            detail=f"現在のプランで表示できる期間は最大{maximum}日です",
         )
 
 
 def _ready_facility(db: Session, user: CurrentUser, write: bool = False) -> models.DBFacility:
     organization = _require_organization(db, user, write=write)
     if not _has_active_subscription(_subscription_for_organization(db, organization.id)):
-        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="An active subscription is required")
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="利用を続けるには、ご契約の確認が必要です")
     facility = db.query(models.DBFacility).filter_by(organization_id=organization.id).first()
     if facility is None or facility.onboarding_completed_at is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Facility setup has not been completed")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="施設の初期設定が完了していません")
     return facility
 
 
@@ -336,7 +345,7 @@ def collect_market_data(
             existing = db.query(models.DBCompetitorPrice).filter_by(competitor_id=competitor.id, stay_date=date).first()
             if refresh or not existing:
                 if date < dt.date.today() and not existing:
-                    raise HTTPException(status_code=503, detail=f"Market data is unavailable for {competitor.name}")
+                    raise HTTPException(status_code=503, detail=f"{competitor.name}の最新データを取得できませんでした")
                 dates_to_collect.append(date)
         if not dates_to_collect:
             continue
@@ -353,7 +362,7 @@ def collect_market_data(
                     _store_result(db, competitor, date, result)
         except DataCollectionError as exc:
             db.rollback()
-            raise HTTPException(status_code=503, detail=f"Market data is unavailable for {competitor.name}") from exc
+            raise HTTPException(status_code=503, detail=f"{competitor.name}の最新データを取得できませんでした") from exc
     db.commit()
 
     rows: list[models.CompetitorPrice] = []
@@ -392,7 +401,7 @@ def read_cached_market_data(
 ) -> list[models.CompetitorPrice]:
     """Read stored market data without starting an OTA collection."""
     if comparison_days not in {1, 7, 30}:
-        raise HTTPException(status_code=422, detail="comparison_days must be 1, 7, or 30")
+        raise HTTPException(status_code=422, detail="比較期間は前日・先週・先月から選んでください")
     competitors = db.query(models.DBCompetitor).filter_by(facility_id=facility.id, is_active=True).all()
     comparison_cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=comparison_days)
     comparison_floor = comparison_cutoff - dt.timedelta(days=1)
@@ -611,7 +620,7 @@ def complete_onboarding(payload: models.OnboardingRequest, user: CurrentUser = D
     if not organization.notification_email:
         organization.notification_email = user.email
     if not _has_active_subscription(_subscription_for_organization(db, organization.id)):
-        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="An active subscription is required before setup")
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="初期設定を始めるには、ご契約の確認が必要です")
     sources = [_validate_ota_url(item.url) for item in payload.competitors]
     facility = db.query(models.DBFacility).filter_by(organization_id=organization.id).first()
     if facility is None:
@@ -691,7 +700,7 @@ def add_competitor(payload: models.CompetitorInput, user: CurrentUser = Depends(
     maximum = 10 if plan == "upgrade" else 3
     current_count = db.query(models.DBCompetitor).filter_by(facility_id=facility.id, is_active=True).count()
     if current_count >= maximum:
-        raise HTTPException(status_code=403, detail=f"Your {plan} plan supports up to {maximum} competitors")
+        raise HTTPException(status_code=403, detail=f"現在のプランで登録できる競合施設は最大{maximum}件です")
     source = _validate_ota_url(payload.url)
     competitor = models.DBCompetitor(
         facility_id=facility.id, ota_source_key=source.key, name=payload.name,
@@ -702,7 +711,7 @@ def add_competitor(payload: models.CompetitorInput, user: CurrentUser = Depends(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="This competitor URL is already registered") from exc
+        raise HTTPException(status_code=409, detail="この競合施設のURLはすでに登録されています") from exc
     db.refresh(competitor)
     return competitor
 
@@ -713,14 +722,14 @@ def update_competitor(comp_id: str, payload: models.CompetitorUpdate, user: Curr
     source = _validate_ota_url(payload.url)
     competitor = db.query(models.DBCompetitor).filter_by(id=comp_id, facility_id=facility.id).first()
     if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+        raise HTTPException(status_code=404, detail="競合施設が見つかりませんでした")
     competitor.name, competitor.url = payload.name, payload.url
     competitor.canonical_url, competitor.ota_source_key = _canonical_url(payload.url), source.key
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=422, detail="This competitor URL is already registered") from exc
+        raise HTTPException(status_code=422, detail="この競合施設のURLはすでに登録されています") from exc
     db.refresh(competitor)
     return competitor
 
@@ -791,11 +800,11 @@ def create_checkout(user: CurrentUser = Depends(require_current_user), db: Sessi
         return models.CheckoutSession(checkout_url=f"{settings.frontend_app_url}/?checkout=success")
     subscription = _subscription_for_organization(db, organization.id)
     if _has_active_subscription(subscription):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Subscription is already active")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="このアカウントはすでに契約中です")
     try:
         return models.CheckoutSession(checkout_url=stripe_billing.create_checkout(organization.id, user.email))
     except BillingConfigurationError as exc:
-        raise HTTPException(status_code=503, detail="Stripe Billing is not configured") from exc
+        raise HTTPException(status_code=503, detail="現在はカード決済の準備中です") from exc
 
 
 @app.post("/billing/portal", response_model=models.CheckoutSession)
@@ -803,11 +812,11 @@ def create_portal(user: CurrentUser = Depends(require_current_user), db: Session
     organization = _require_organization(db, user, write=True)
     subscription = _subscription_for_organization(db, organization.id)
     if not subscription or not subscription.stripe_customer_id:
-        raise HTTPException(status_code=404, detail="No Stripe customer is linked to this organization")
+        raise HTTPException(status_code=404, detail="この契約は画面から変更できません。運営者へお問い合わせください")
     try:
         return models.CheckoutSession(checkout_url=stripe_billing.create_portal(subscription.stripe_customer_id))
     except BillingConfigurationError as exc:
-        raise HTTPException(status_code=503, detail="Stripe Billing is not configured") from exc
+        raise HTTPException(status_code=503, detail="現在はカード決済の準備中です") from exc
 
 
 @app.post("/webhooks/stripe", status_code=status.HTTP_200_OK)
@@ -815,7 +824,7 @@ async def stripe_webhook(request: Request, stripe_signature: str | None = Header
     try:
         event = stripe_billing.verify_event(await request.body(), stripe_signature)
     except BillingConfigurationError as exc:
-        raise HTTPException(status_code=400, detail="Invalid Stripe webhook") from exc
+        raise HTTPException(status_code=400, detail="決済通知を確認できませんでした") from exc
 
     event_type = event["type"]
     data = event["data"]["object"]

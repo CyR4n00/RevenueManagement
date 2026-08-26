@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "レベナビ",
+  "name": "レベナビ 価格判断支援",
   "icons": [
     {
       "src": "favicon.ico",

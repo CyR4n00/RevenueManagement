@@ -51,6 +51,36 @@ def reset_database():
         db.commit()
 
 
+def test_subscription_with_future_end_is_active():
+    import main
+
+    subscription = SimpleNamespace(
+        status="active",
+        current_period_end=dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1),
+    )
+
+    assert main._has_active_subscription(subscription) is True
+
+
+def test_subscription_with_expired_end_is_inactive():
+    import main
+
+    subscription = SimpleNamespace(
+        status="active",
+        current_period_end=dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=1),
+    )
+
+    assert main._has_active_subscription(subscription) is False
+
+
+def test_manual_subscription_without_end_remains_active():
+    import main
+
+    subscription = SimpleNamespace(status="active", current_period_end=None)
+
+    assert main._has_active_subscription(subscription) is True
+
+
 def test_reference_rank_uses_competitor_average_without_hidden_markup():
     import main
 
