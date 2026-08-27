@@ -76,5 +76,7 @@ Stripe DashboardのWebhook Endpointには `POST /webhooks/stripe` を登録し�
 - 顧客向けのやさしい操作説明：[`docs/CLIENT_GUIDE.md`](docs/CLIENT_GUIDE.md)
 - 運営者向けの日常運用・障害対応：[`docs/OPERATOR_MANUAL.md`](docs/OPERATOR_MANUAL.md)
 - 営業開始までの残作業：[`CHECKLIST.md`](CHECKLIST.md)
+- 印刷・配布用PDF：[`output/pdf/`](output/pdf/)
+- ページごとの画像：[`output/images/`](output/images/)
 
 顧客向けマニュアルは、専門用語を避け、初めてパソコンを使う方でも順番に操作できる表現にしています。運営者向けマニュアルには、カード決済と振込の両方、データ取得、メール通知、契約停止、問い合わせ対応を記載しています。
