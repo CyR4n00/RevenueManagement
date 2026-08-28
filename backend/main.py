@@ -105,6 +105,12 @@ def _ensure_sqlite_compatibility_columns() -> None:
             ("remaining_rooms", "INTEGER"),
             ("availability_source", "VARCHAR(20) NOT NULL DEFAULT 'inferred'"),
         ),
+        "competitor_collection_runs": (
+            ("completed_at", "DATETIME"),
+            ("status", "VARCHAR(16) NOT NULL DEFAULT 'started'"),
+            ("records_collected", "INTEGER NOT NULL DEFAULT 0"),
+            ("error_message", "TEXT"),
+        ),
     }
     with engine.begin() as connection:
         schema = inspect(connection)
@@ -115,7 +121,7 @@ def _ensure_sqlite_compatibility_columns() -> None:
             for column_name, definition in columns:
                 if column_name not in existing:
                     connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"))
-            if table_name != "organizations":
+            if table_name in {"competitor_prices", "competitor_price_observations"}:
                 connection.execute(text(
                     f"UPDATE {table_name} SET availability_status = "
                     "CASE WHEN is_fully_booked = 1 THEN 'sold_out' "
@@ -189,6 +195,13 @@ def _organization_for_user(db: Session, user: CurrentUser) -> models.DBOrganizat
     if membership is None:
         return None
     return db.query(models.DBOrganization).filter_by(id=membership.organization_id).first()
+
+
+def require_operator(user: CurrentUser = Depends(require_current_user)) -> CurrentUser:
+    """Allow only Supabase-verified operator emails configured by the platform."""
+    if user.email.strip().lower() not in settings.operator_emails:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="運営者権限が必要です")
+    return user
 
 
 def _require_organization(db: Session, user: CurrentUser, write: bool = False) -> models.DBOrganization:
@@ -300,33 +313,64 @@ def _store_result(db: Session, competitor: models.DBCompetitor, date: dt.date, r
     return record
 
 
-def _reserve_collection_run(db: Session, competitor: models.DBCompetitor) -> None:
+def _reserve_collection_run(db: Session, competitor: models.DBCompetitor) -> int | None:
     """Reserve a production Actor invocation before it leaves our system.
 
     Failed provider requests still consume a slot: retrying indefinitely is not
     compatible with the written daily collection limit.
     """
     if settings.environment != "production":
-        return
+        return None
     collection_day = dt.datetime.now(ZoneInfo("Asia/Tokyo")).date()
+    if settings.apify_monthly_run_limit:
+        month_start = collection_day.replace(day=1)
+        monthly_used = db.query(models.DBCompetitorCollectionRun).filter(
+            models.DBCompetitorCollectionRun.collection_day >= month_start,
+        ).count()
+        if monthly_used >= settings.apify_monthly_run_limit:
+            raise DataCollectionError("The configured monthly Apify run limit has been reached")
     limit = len(settings.daily_sync_hours)
     used = db.query(models.DBCompetitorCollectionRun).filter_by(
         competitor_id=competitor.id, collection_day=collection_day,
     ).count()
     if used >= limit:
         raise DataCollectionError("The approved daily collection limit has been reached")
-    db.add(models.DBCompetitorCollectionRun(
+    run = models.DBCompetitorCollectionRun(
         competitor_id=competitor.id,
         collection_day=collection_day,
         slot=used + 1,
         collection_source="apify",
-    ))
+    )
+    db.add(run)
     try:
         # Commit before calling Apify so a failed call cannot erase its slot.
+        db.flush()
+        run_id = run.id
         db.commit()
     except IntegrityError as exc:
         db.rollback()
         raise DataCollectionError("A concurrent collection already used this daily slot") from exc
+    return run_id
+
+
+def _finish_collection_run(
+    db: Session,
+    run_id: int | None,
+    *,
+    run_status: str,
+    records_collected: int = 0,
+    error_message: str | None = None,
+) -> None:
+    if run_id is None:
+        return
+    run = db.query(models.DBCompetitorCollectionRun).filter_by(id=run_id).one_or_none()
+    if run is None:
+        return
+    run.status = run_status
+    run.completed_at = dt.datetime.now(dt.timezone.utc)
+    run.records_collected = records_collected
+    run.error_message = error_message[:1000] if error_message else None
+    db.commit()
 
 
 def collect_market_data(
@@ -349,10 +393,11 @@ def collect_market_data(
                 dates_to_collect.append(date)
         if not dates_to_collect:
             continue
+        run_id: int | None = None
         try:
             # A dashboard horizon is one approved Actor run per competitor,
             # rather than one run for every stay date.
-            _reserve_collection_run(db, competitor)
+            run_id = _reserve_collection_run(db, competitor)
             results = scraper_service.extract_prices(
                 competitor.url, [date.isoformat() for date in dates_to_collect], competitor.id,
             )
@@ -360,8 +405,14 @@ def collect_market_data(
                 result = results.get(date.isoformat())
                 if result is not None:
                     _store_result(db, competitor, date, result)
+            _finish_collection_run(
+                db, run_id, run_status="succeeded", records_collected=len(results),
+            )
         except DataCollectionError as exc:
             db.rollback()
+            _finish_collection_run(
+                db, run_id, run_status="failed", error_message=str(exc),
+            )
             raise HTTPException(status_code=503, detail=f"{competitor.name}の最新データを取得できませんでした") from exc
     db.commit()
 
@@ -595,6 +646,139 @@ def integration_status():
         simulation_enabled=settings.allow_simulated_data,
         ota_sources=ota_sources,
     )
+
+
+@app.get("/public/legal-config")
+def public_legal_config():
+    """Expose only business details that are intended for public legal pages."""
+    values = {
+        "business_name": settings.business_name,
+        "representative": settings.business_representative,
+        "address": settings.business_address,
+        "phone": settings.business_phone,
+        "support_email": settings.support_email,
+    }
+    return {**values, "complete": all(values.values())}
+
+
+@app.get("/operator/summary", response_model=models.OperatorSummary)
+def operator_summary(
+    _operator: CurrentUser = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7)
+    successful = db.query(models.DBCompetitorCollectionRun).filter(
+        models.DBCompetitorCollectionRun.status == "succeeded",
+    ).order_by(models.DBCompetitorCollectionRun.completed_at.desc()).first()
+    local_today = dt.datetime.now(ZoneInfo("Asia/Tokyo")).date()
+    month_start = local_today.replace(day=1)
+    return models.OperatorSummary(
+        organizations=db.query(models.DBOrganization).count(),
+        active_subscriptions=db.query(models.DBSubscription).filter_by(status="active").count(),
+        collection_runs_7d=db.query(models.DBCompetitorCollectionRun).filter(
+            models.DBCompetitorCollectionRun.started_at >= cutoff,
+        ).count(),
+        failed_collection_runs_7d=db.query(models.DBCompetitorCollectionRun).filter(
+            models.DBCompetitorCollectionRun.started_at >= cutoff,
+            models.DBCompetitorCollectionRun.status == "failed",
+        ).count(),
+        last_success_at=successful.completed_at if successful else None,
+        collection_runs_month=db.query(models.DBCompetitorCollectionRun).filter(
+            models.DBCompetitorCollectionRun.collection_day >= month_start,
+        ).count(),
+        monthly_run_limit=settings.apify_monthly_run_limit,
+    )
+
+
+@app.get("/operator/accounts", response_model=list[models.OperatorAccount])
+def operator_accounts(
+    _operator: CurrentUser = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
+    rows: list[models.OperatorAccount] = []
+    for organization in db.query(models.DBOrganization).order_by(models.DBOrganization.created_at.desc()).all():
+        facility = db.query(models.DBFacility).filter_by(organization_id=organization.id).first()
+        subscription = _subscription_for_organization(db, organization.id)
+        payment_method = "none"
+        if subscription:
+            payment_method = "stripe" if subscription.stripe_customer_id else "bank_transfer"
+        rows.append(models.OperatorAccount(
+            organization_id=organization.id,
+            organization_name=organization.name,
+            facility_name=facility.name if facility else None,
+            notification_email=organization.notification_email,
+            subscription_status=subscription.status if subscription else "inactive",
+            current_period_end=subscription.current_period_end if subscription else None,
+            payment_method=payment_method,
+        ))
+    return rows
+
+
+@app.put("/operator/accounts/{organization_id}/subscription", response_model=models.OperatorAccount)
+def update_operator_subscription(
+    organization_id: str,
+    payload: models.OperatorSubscriptionUpdate,
+    _operator: CurrentUser = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
+    organization = db.query(models.DBOrganization).filter_by(id=organization_id).one_or_none()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="対象の顧客が見つかりません")
+    if payload.status == "active" and payload.current_period_end:
+        period_end = payload.current_period_end
+        if period_end.tzinfo is None:
+            period_end = period_end.replace(tzinfo=dt.timezone.utc)
+        if period_end <= dt.datetime.now(dt.timezone.utc):
+            raise HTTPException(status_code=422, detail="利用期限は未来の日付を指定してください")
+    subscription = _subscription_for_organization(db, organization_id)
+    if subscription is None:
+        subscription = models.DBSubscription(organization_id=organization_id)
+        db.add(subscription)
+    if subscription.stripe_customer_id:
+        raise HTTPException(status_code=409, detail="カード契約はStripeの契約画面から変更してください")
+    subscription.status = payload.status
+    subscription.current_period_end = payload.current_period_end
+    db.commit()
+    facility = db.query(models.DBFacility).filter_by(organization_id=organization.id).first()
+    return models.OperatorAccount(
+        organization_id=organization.id,
+        organization_name=organization.name,
+        facility_name=facility.name if facility else None,
+        notification_email=organization.notification_email,
+        subscription_status=subscription.status,
+        current_period_end=subscription.current_period_end,
+        payment_method="bank_transfer",
+    )
+
+
+@app.get("/operator/payments", response_model=list[models.PaymentLedger])
+def operator_payments(
+    _operator: CurrentUser = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
+    return db.query(models.DBPaymentLedger).order_by(
+        models.DBPaymentLedger.billing_month.desc(), models.DBPaymentLedger.created_at.desc(),
+    ).all()
+
+
+@app.post("/operator/payments", response_model=models.PaymentLedger, status_code=status.HTTP_201_CREATED)
+def create_operator_payment(
+    payload: models.PaymentLedgerCreate,
+    _operator: CurrentUser = Depends(require_operator),
+    db: Session = Depends(get_db),
+):
+    organization = db.query(models.DBOrganization).filter_by(id=payload.organization_id).one_or_none()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="対象の顧客が見つかりません")
+    if payload.status == "paid" and payload.paid_at is None:
+        raise HTTPException(status_code=422, detail="入金済みの場合は入金日を入力してください")
+    if payload.service_end < payload.billing_month:
+        raise HTTPException(status_code=422, detail="利用期限は請求月以降を指定してください")
+    record = models.DBPaymentLedger(**payload.model_dump())
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
 
 
 @app.get("/onboarding/status", response_model=models.OnboardingStatus)

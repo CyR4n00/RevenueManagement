@@ -75,6 +75,8 @@ Stripe DashboardのWebhook Endpointには `POST /webhooks/stripe` を登録し�
 
 - 顧客向けのやさしい操作説明：[`docs/CLIENT_GUIDE.md`](docs/CLIENT_GUIDE.md)
 - 運営者向けの日常運用・障害対応：[`docs/OPERATOR_MANUAL.md`](docs/OPERATOR_MANUAL.md)
+- 問い合わせ・障害・振込・解約の運用ルール：[`docs/OPERATIONS_RULES.md`](docs/OPERATIONS_RULES.md)
+- 安全なデータ復旧確認手順：[`docs/RESTORE_DRILL.md`](docs/RESTORE_DRILL.md)
 - 営業開始までの残作業：[`CHECKLIST.md`](CHECKLIST.md)
 - 印刷・配布用PDF：[`output/pdf/`](output/pdf/)
 - ページごとの画像：[`output/images/`](output/images/)

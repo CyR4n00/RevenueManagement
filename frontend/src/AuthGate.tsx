@@ -109,6 +109,7 @@ export function AuthGate() {
       {message && <p role="status" className="mt-4 rounded bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
       {error && <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       <p className="mt-5 text-xs leading-relaxed text-slate-500">パスワード方式とメールリンク方式は、同じメールアドレスの同じアカウントで併用できます。</p>
+      <nav className="mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t pt-4 text-xs text-slate-500"><a href="#terms" className="hover:text-blue-700">利用規約</a><a href="#privacy" className="hover:text-blue-700">プライバシー</a><a href="#commerce" className="hover:text-blue-700">特定商取引法表記</a><a href="#contact" className="hover:text-blue-700">お問い合わせ</a></nav>
     </section>
   </main>;
 }

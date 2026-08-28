@@ -5,6 +5,8 @@ import './App.css';
 import { AuthGate, authErrorMessage } from './AuthGate';
 import { OnboardingGate } from './OnboardingGate';
 import { SettingsPanel } from './SettingsPanel';
+import { OperatorPanel } from './OperatorPanel';
+import { PublicPages, PublicPageName } from './PublicPages';
 import { authIsConfigured, runtimeConfig, supabase } from './supabase';
 import { userFacingErrorMessage } from './errorMessages';
 
@@ -66,7 +68,7 @@ function availabilityText(item: CompetitorPrice) {
   return '空室状況不明';
 }
 
-type SidebarIconName = 'overview' | 'proposal' | 'compare' | 'calendar' | 'settings' | 'logout';
+type SidebarIconName = 'overview' | 'proposal' | 'compare' | 'calendar' | 'operator' | 'settings' | 'logout';
 
 function SidebarIcon({ name }: { name: SidebarIconName }) {
   const paths = {
@@ -74,13 +76,14 @@ function SidebarIcon({ name }: { name: SidebarIconName }) {
     proposal: <><path d="M12 3 4.5 7.5 12 12l7.5-4.5L12 3Z" /><path d="m4.5 12 7.5 4.5 7.5-4.5" /><path d="m4.5 16.5 7.5 4.5 7.5-4.5" /></>,
     compare: <><path d="M5 20V10" /><path d="M12 20V4" /><path d="M19 20v-7" /></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
+    operator: <><path d="M12 3 4 6.5v5.2c0 4.6 3.2 7.8 8 9.3 4.8-1.5 8-4.7 8-9.3V6.5L12 3Z" /><path d="M8.5 12.5 11 15l4.8-5" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.38.34.72.6 1 .3.28.68.42 1.1.4h.1v4h-.1c-.42-.02-.8.12-1.1.4-.26.28-.47.62-.6 1Z" /></>,
     logout: <><path d="M10 17l5-5-5-5" /><path d="M15 12H3" /><path d="M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" /></>,
   };
   return <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-function DashboardSidebar({ onSettings, onSignOut, signedIn }: { onSettings: () => void; onSignOut: () => void; signedIn: boolean }) {
+function DashboardSidebar({ onSettings, onOperator, onSignOut, signedIn, operatorAvailable }: { onSettings: () => void; onOperator: () => void; onSignOut: () => void; signedIn: boolean; operatorAvailable: boolean }) {
   const [activeHash, setActiveHash] = useState(window.location.hash || '#overview');
   useEffect(() => {
     const syncHash = () => setActiveHash(window.location.hash || '#overview');
@@ -96,7 +99,7 @@ function DashboardSidebar({ onSettings, onSignOut, signedIn }: { onSettings: () 
   return <aside className="dashboard-sidebar">
     <div className="sidebar-brand" aria-label="レベナビ"><span className="sidebar-logo">レ</span><span className="sidebar-brand-copy"><strong>レベナビ</strong><small>価格判断支援</small></span></div>
     <nav className="sidebar-nav">{items.map(item => <a key={item.href} href={item.href} onClick={() => setActiveHash(item.href)} title={item.label} aria-label={item.label} aria-current={activeHash === item.href ? 'page' : undefined} className={`sidebar-link ${activeHash === item.href ? 'sidebar-link-active' : ''}`}><span className="sidebar-icon"><SidebarIcon name={item.icon} /></span><span className="sidebar-label">{item.label}</span></a>)}</nav>
-    <div className="sidebar-actions"><p className="sidebar-section-label">アカウント</p><button type="button" onClick={onSettings} title="設定" aria-label="設定" className="sidebar-link"><span className="sidebar-icon"><SidebarIcon name="settings" /></span><span className="sidebar-label">設定</span></button>{signedIn && <button type="button" onClick={onSignOut} title="ログアウト" aria-label="ログアウト" className="sidebar-link sidebar-signout"><span className="sidebar-icon"><SidebarIcon name="logout" /></span><span className="sidebar-label">ログアウト</span></button>}</div>
+    <div className="sidebar-actions"><p className="sidebar-section-label">アカウント</p>{operatorAvailable && <button type="button" onClick={onOperator} title="運営管理" aria-label="運営管理" className="sidebar-link"><span className="sidebar-icon"><SidebarIcon name="operator" /></span><span className="sidebar-label">運営管理</span></button>}<button type="button" onClick={onSettings} title="設定" aria-label="設定" className="sidebar-link"><span className="sidebar-icon"><SidebarIcon name="settings" /></span><span className="sidebar-label">設定</span></button>{signedIn && <button type="button" onClick={onSignOut} title="ログアウト" aria-label="ログアウト" className="sidebar-link sidebar-signout"><span className="sidebar-icon"><SidebarIcon name="logout" /></span><span className="sidebar-label">ログアウト</span></button>}</div>
   </aside>;
 }
 
@@ -191,6 +194,9 @@ function App() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [registeredCompetitors, setRegisteredCompetitors] = useState<RegisteredCompetitor[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [showOperator, setShowOperator] = useState(false);
+  const [operatorAvailable, setOperatorAvailable] = useState(false);
+  const [currentHash, setCurrentHash] = useState(window.location.hash);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
@@ -212,6 +218,12 @@ function App() {
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
     });
     return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const updateHash = () => setCurrentHash(window.location.hash);
+    window.addEventListener('hashchange', updateHash);
+    return () => window.removeEventListener('hashchange', updateHash);
   }, []);
 
   const authHeaders = session ? { Authorization: `Bearer ${session.access_token}` } : {};
@@ -251,9 +263,18 @@ function App() {
   };
 
   useEffect(() => { if (dashboardReady) void fetchData(); }, [selectedDate, comparisonDays, horizonDays, dashboardReady, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!dashboardReady || !session) { setOperatorAvailable(false); return; }
+    void axios.get(`${API_BASE}/operator/summary`, { headers: { Authorization: `Bearer ${session.access_token}` } })
+      .then(() => setOperatorAvailable(true))
+      .catch(() => setOperatorAvailable(false));
+  }, [dashboardReady, session]);
   useEffect(() => { setFocusedDate(selectedDate); }, [selectedDate]);
 
   const signOut = () => { if (supabase) void supabase.auth.signOut(); };
+
+  const publicPage = currentHash.slice(1) as PublicPageName;
+  if (['terms', 'privacy', 'commerce', 'contact'].includes(publicPage)) return <PublicPages apiBase={API_BASE} page={publicPage} />;
 
   if (authLoading) return <main className="min-h-screen bg-slate-50 p-8"><p className="mx-auto max-w-md rounded border bg-white p-5 text-sm">ログイン状態を確認しています…</p></main>;
   if (authIsConfigured && !session) return <AuthGate />;
@@ -272,11 +293,12 @@ function App() {
   const averageMovement = availableMarket.filter(item => item.comparison_available).length ? Math.round(availableMarket.filter(item => item.comparison_available).reduce((sum, item) => sum + item.difference, 0) / availableMarket.filter(item => item.comparison_available).length) : null;
   const comparisonReadyCount = marketData.filter(item => item.comparison_available).length;
   return <main className="dashboard-stage min-h-screen p-2 text-slate-900 md:p-6"><div className="dashboard-shell">
-    <DashboardSidebar onSettings={() => setShowSettings(true)} onSignOut={signOut} signedIn={Boolean(session)} />
+    <DashboardSidebar onSettings={() => setShowSettings(true)} onOperator={() => setShowOperator(true)} onSignOut={signOut} signedIn={Boolean(session)} operatorAvailable={operatorAvailable} />
     <div className="dashboard-workspace min-w-0 flex-1">
     <header className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 md:flex-row md:items-center md:justify-between md:px-8"><div><p className="text-xs font-bold tracking-[0.2em] text-indigo-500">レベナビ</p><h1 className="mt-1 text-3xl font-black tracking-tight">価格分析ダッシュボード</h1><p className="mt-1 text-sm text-slate-500">競合市場を読み解き、今日の販売判断をつくる</p></div><div className="flex flex-wrap items-center gap-3"><label className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-500 shadow-sm">対象日 <input aria-label="対象日" type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} className="ml-2 bg-transparent font-bold text-slate-900 outline-none" disabled={loading} /></label>{session && <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white py-1 pl-1 pr-3 shadow-sm"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-xs font-black text-white">{session.user.email?.slice(0, 1).toUpperCase()}</span><span className="max-w-36 truncate text-xs font-bold">{session.user.email}</span></div>}</div></header>
     <div className="space-y-6 p-4 md:p-8">
     {showSettings && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setShowSettings(false); }}><SettingsPanel apiBase={API_BASE} accessToken={session?.access_token || ''} onClose={() => { setShowSettings(false); void fetchData(); }} /></div>}
+    {showOperator && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setShowOperator(false); }}><OperatorPanel apiBase={API_BASE} accessToken={session?.access_token || ''} onClose={() => setShowOperator(false)} /></div>}
     {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
     {warning && <p role="status" className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{warning}</p>}
     {hasSimulation && <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">これはデモ用の疑似データです。本番ではApifyと許諾済みOTAのデータだけを利用します。</p>}

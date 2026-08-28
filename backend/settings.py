@@ -34,6 +34,10 @@ def _sync_hours() -> tuple[int, ...]:
     return hours
 
 
+def _csv_values(name: str) -> tuple[str, ...]:
+    return tuple(value.strip().lower() for value in os.getenv(name, "").split(",") if value.strip())
+
+
 @dataclass(frozen=True)
 class OtaSourceRuntime:
     key: str
@@ -74,6 +78,13 @@ class Settings:
     daily_sync_hours: tuple[int, ...]
     daily_sync_minute: int
     sync_lookahead_days: int
+    apify_monthly_run_limit: int
+    operator_emails: tuple[str, ...]
+    business_name: str
+    business_representative: str
+    business_address: str
+    business_phone: str
+    support_email: str
 
     def source_for_url(self, url: str) -> OtaSourceRuntime | None:
         host = (urlparse(url).hostname or "").lower()
@@ -132,4 +143,11 @@ def get_settings() -> Settings:
         daily_sync_hours=_sync_hours(),
         daily_sync_minute=int(os.getenv("DAILY_SYNC_MINUTE", "0")),
         sync_lookahead_days=max(1, min(90, int(os.getenv("SYNC_LOOKAHEAD_DAYS", "90")))),
+        apify_monthly_run_limit=max(0, int(os.getenv("APIFY_MONTHLY_RUN_LIMIT", "0"))),
+        operator_emails=_csv_values("OPERATOR_EMAILS"),
+        business_name=os.getenv("BUSINESS_NAME", "").strip(),
+        business_representative=os.getenv("BUSINESS_REPRESENTATIVE", "").strip(),
+        business_address=os.getenv("BUSINESS_ADDRESS", "").strip(),
+        business_phone=os.getenv("BUSINESS_PHONE", "").strip(),
+        support_email=os.getenv("SUPPORT_EMAIL", "").strip(),
     )

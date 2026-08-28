@@ -144,6 +144,10 @@ class DBCompetitorCollectionRun(Base):
     collection_day = Column(Date, nullable=False)
     slot = Column(Integer, nullable=False)
     started_at = Column(DateTime(timezone=True), nullable=False, default=now_utc)
+    completed_at = Column(DateTime(timezone=True))
+    status = Column(String(16), nullable=False, default="started")
+    records_collected = Column(Integer, nullable=False, default=0)
+    error_message = Column(Text)
     collection_source = Column(String(16), nullable=False, default="apify")
     competitor = relationship("DBCompetitor")
 
@@ -172,6 +176,25 @@ class DBSubscription(Base):
     stripe_price_id = Column(String)
     status = Column(String(32), nullable=False, default="inactive")
     current_period_end = Column(DateTime(timezone=True))
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now_utc, onupdate=now_utc)
+    organization = relationship("DBOrganization")
+
+
+class DBPaymentLedger(Base):
+    """Operator-maintained bank-transfer ledger with an explicit service deadline."""
+
+    __tablename__ = "payment_ledger"
+
+    id = Column(id_type(), primary_key=True, default=new_id)
+    organization_id = Column(id_type(), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_name = Column(String(160), nullable=False)
+    billing_month = Column(Date, nullable=False)
+    paid_at = Column(Date)
+    amount_jpy = Column(Integer, nullable=False)
+    service_end = Column(Date, nullable=False)
+    status = Column(String(16), nullable=False, default="paid")
+    note = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now_utc)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now_utc, onupdate=now_utc)
     organization = relationship("DBOrganization")
 
@@ -334,3 +357,58 @@ class BillingStatus(BaseModel):
     plan: Literal["standard", "upgrade"] = "standard"
     max_horizon_days: int = 180
     max_competitors: int = 3
+
+
+class OperatorSummary(BaseModel):
+    organizations: int
+    active_subscriptions: int
+    collection_runs_7d: int
+    failed_collection_runs_7d: int
+    last_success_at: dt.datetime | None = None
+    collection_runs_month: int
+    monthly_run_limit: int
+
+
+class OperatorAccount(BaseModel):
+    organization_id: str
+    organization_name: str
+    facility_name: str | None = None
+    notification_email: str | None = None
+    subscription_status: str
+    current_period_end: dt.datetime | None = None
+    payment_method: Literal["stripe", "bank_transfer", "none"]
+
+
+class OperatorSubscriptionUpdate(BaseModel):
+    status: Literal["active", "inactive", "canceled"]
+    current_period_end: dt.datetime | None = None
+
+    @model_validator(mode="after")
+    def active_manual_subscription_needs_an_end(self):
+        if self.status == "active" and self.current_period_end is None:
+            raise ValueError("active manual subscriptions require current_period_end")
+        return self
+
+
+class PaymentLedgerCreate(BaseModel):
+    organization_id: str
+    customer_name: str = Field(min_length=1, max_length=160)
+    billing_month: dt.date
+    paid_at: dt.date | None = None
+    amount_jpy: int = Field(gt=0, le=10_000_000)
+    service_end: dt.date
+    status: Literal["paid", "unpaid", "canceled"] = "paid"
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class PaymentLedger(BaseModel):
+    id: str
+    organization_id: str
+    customer_name: str
+    billing_month: dt.date
+    paid_at: dt.date | None = None
+    amount_jpy: int
+    service_end: dt.date
+    status: str
+    note: str | None = None
+    model_config = ConfigDict(from_attributes=True)

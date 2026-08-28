@@ -38,6 +38,7 @@ app.dependency_overrides[get_db] = override_get_db
 
 def reset_database():
     with TestSession() as db:
+        db.query(models.DBPaymentLedger).delete()
         db.query(models.DBNotificationDelivery).delete()
         db.query(models.DBCompetitorCollectionRun).delete()
         db.query(models.DBCompetitorPriceObservation).delete()
@@ -49,6 +50,53 @@ def reset_database():
         db.query(models.DBOrganizationMember).delete()
         db.query(models.DBOrganization).delete()
         db.commit()
+
+
+def test_operator_routes_require_allowlisted_verified_email(monkeypatch):
+    import main
+    from auth import CurrentUser
+
+    reset_database()
+    monkeypatch.setattr(main, "settings", replace(main.settings, operator_emails=("operator@example.com",)))
+    app.dependency_overrides[main.require_current_user] = lambda: CurrentUser(id="customer", email="customer@example.com")
+    try:
+        with TestClient(app) as client:
+            response = client.get("/operator/summary")
+        assert response.status_code == 403
+    finally:
+        app.dependency_overrides.pop(main.require_current_user, None)
+
+
+def test_operator_can_record_payment_and_activate_bank_transfer(monkeypatch):
+    import main
+    from auth import CurrentUser
+
+    reset_database()
+    seed_ready_account()
+    with TestSession() as db:
+        subscription = db.query(models.DBSubscription).filter_by(organization_id="org-1").one()
+        subscription.status = "inactive"
+        db.commit()
+    monkeypatch.setattr(main, "settings", replace(main.settings, operator_emails=("operator@example.com",)))
+    app.dependency_overrides[main.require_current_user] = lambda: CurrentUser(id="operator", email="operator@example.com")
+    service_end = (dt.date.today() + dt.timedelta(days=31)).isoformat()
+    try:
+        with TestClient(app) as client:
+            payment = client.post("/operator/payments", json={
+                "organization_id": "org-1", "customer_name": "Test Facility",
+                "billing_month": dt.date.today().replace(day=1).isoformat(),
+                "paid_at": dt.date.today().isoformat(), "amount_jpy": 30_000,
+                "service_end": service_end, "status": "paid",
+            })
+            activated = client.put("/operator/accounts/org-1/subscription", json={
+                "status": "active", "current_period_end": f"{service_end}T23:59:59+09:00",
+            })
+        assert payment.status_code == 201
+        assert activated.status_code == 200
+        assert activated.json()["subscription_status"] == "active"
+        assert activated.json()["payment_method"] == "bank_transfer"
+    finally:
+        app.dependency_overrides.pop(main.require_current_user, None)
 
 
 def test_subscription_with_future_end_is_active():
