@@ -11,6 +11,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas as pdfcanvas
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
@@ -27,6 +29,7 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output" / "pdf"
 IMAGE_OUT = ROOT / "output" / "images"
+CLIENT_ASSETS = ROOT / "docs" / "manual-assets" / "client-guide"
 FONT_REGULAR = Path(r"C:\Windows\Fonts\NotoSansJP-VF.ttf")
 FONT_BOLD = Path(r"C:\Windows\Fonts\YuGothB.ttc")
 
@@ -249,6 +252,195 @@ def build(source: str, output: str, label: str, subtitle: str, edition: str, che
     doc.build(story)
 
 
+def draw_wrapped(canvas, text: str, x: float, y_top: float, width: float, size: float = 8.5, leading: float = 13, color=TEXT, bold: bool = False):
+    style = ParagraphStyle(
+        "visual-note",
+        fontName=BOLD if bold else REGULAR,
+        fontSize=size,
+        leading=leading,
+        textColor=color,
+        wordWrap="CJK",
+    )
+    paragraph = Paragraph(clean_inline(text), style)
+    _, height = paragraph.wrap(width, 200 * mm)
+    paragraph.drawOn(canvas, x, y_top - height)
+    return height
+
+
+def visual_header(canvas, title: str, step: str):
+    page_width, page_height = (A4[1], A4[0])
+    canvas.setFillColor(NAVY)
+    canvas.rect(0, page_height - 20 * mm, page_width, 20 * mm, stroke=0, fill=1)
+    canvas.setFillColor(CYAN)
+    canvas.setFont(BOLD, 8)
+    canvas.drawString(12 * mm, page_height - 8 * mm, step)
+    canvas.setFillColor(colors.white)
+    canvas.setFont(BOLD, 18)
+    canvas.drawString(12 * mm, page_height - 16 * mm, title)
+    canvas.setFillColor(colors.HexColor("#C9D8F4"))
+    canvas.setFont(REGULAR, 7.5)
+    canvas.drawRightString(page_width - 12 * mm, page_height - 12 * mm, "レベナビ｜画面でわかる使い方")
+
+
+def visual_screen_page(canvas, title: str, step: str, image_name: str, notes: list[str], markers: list[tuple[float, float]], tip: str):
+    page_width, page_height = (A4[1], A4[0])
+    visual_header(canvas, title, step)
+    image = ImageReader(str(CLIENT_ASSETS / image_name))
+    image_width, image_height = image.getSize()
+    screen_x, screen_y = 10 * mm, 27 * mm
+    screen_box_width, screen_box_height = 205 * mm, 156 * mm
+    ratio = min(screen_box_width / image_width, screen_box_height / image_height)
+    draw_width, draw_height = image_width * ratio, image_height * ratio
+    draw_y = screen_y + (screen_box_height - draw_height) / 2
+    canvas.setFillColor(MUTED)
+    canvas.setFont(REGULAR, 7)
+    canvas.drawString(screen_x, page_height - 24.5 * mm, "画面例｜表示している数値は説明用です")
+    canvas.setFillColor(colors.white)
+    canvas.roundRect(screen_x - 1.5 * mm, draw_y - 1.5 * mm, draw_width + 3 * mm, draw_height + 3 * mm, 3 * mm, stroke=0, fill=1)
+    canvas.setStrokeColor(LINE)
+    canvas.roundRect(screen_x - 1.5 * mm, draw_y - 1.5 * mm, draw_width + 3 * mm, draw_height + 3 * mm, 3 * mm, stroke=1, fill=0)
+    canvas.drawImage(image, screen_x, draw_y, width=draw_width, height=draw_height, preserveAspectRatio=True, mask="auto")
+
+    for index, (nx, ny) in enumerate(markers, start=1):
+        target_x = screen_x + nx * draw_width
+        target_y = draw_y + (1 - ny) * draw_height
+        badge_x = target_x + 3.5 * mm
+        badge_y = target_y + 3.5 * mm
+        canvas.setStrokeColor(colors.white)
+        canvas.setLineWidth(3)
+        canvas.line(badge_x - 2 * mm, badge_y - 2 * mm, target_x, target_y)
+        canvas.setStrokeColor(BLUE)
+        canvas.setLineWidth(1.4)
+        canvas.line(badge_x - 2 * mm, badge_y - 2 * mm, target_x, target_y)
+        canvas.setFillColor(BLUE)
+        canvas.setStrokeColor(colors.white)
+        canvas.circle(badge_x, badge_y, 4.3 * mm, stroke=1, fill=1)
+        canvas.setFillColor(colors.white)
+        canvas.setFont(BOLD, 8.5)
+        canvas.drawCentredString(badge_x, badge_y - 2.7, str(index))
+
+    notes_x = 224 * mm
+    notes_width = 62 * mm
+    notes_y = page_height - 31 * mm
+    for index, note in enumerate(notes, start=1):
+        canvas.setFillColor(PALE_BLUE if index % 2 else colors.white)
+        canvas.setStrokeColor(LINE)
+        note_height = 17 * mm if len(note) < 38 else 21 * mm
+        canvas.roundRect(notes_x, notes_y - note_height, notes_width, note_height - 2 * mm, 2.5 * mm, stroke=1, fill=1)
+        canvas.setFillColor(BLUE)
+        canvas.circle(notes_x + 6 * mm, notes_y - 7 * mm, 3.5 * mm, stroke=0, fill=1)
+        canvas.setFillColor(colors.white)
+        canvas.setFont(BOLD, 7.5)
+        canvas.drawCentredString(notes_x + 6 * mm, notes_y - 8.8 * mm, str(index))
+        draw_wrapped(canvas, note, notes_x + 12 * mm, notes_y - 3.5 * mm, notes_width - 15 * mm, size=7.7, leading=11.5)
+        notes_y -= note_height
+
+    canvas.setFillColor(PALE_YELLOW)
+    canvas.setStrokeColor(colors.HexColor("#F2D37C"))
+    canvas.roundRect(notes_x, 27 * mm, notes_width, 18 * mm, 2.5 * mm, stroke=1, fill=1)
+    canvas.setFillColor(colors.HexColor("#8A5A00"))
+    canvas.setFont(BOLD, 7.5)
+    canvas.drawString(notes_x + 4 * mm, 40 * mm, "覚えておくこと")
+    draw_wrapped(canvas, tip, notes_x + 4 * mm, 37 * mm, notes_width - 8 * mm, size=7.2, leading=10.5, color=colors.HexColor("#6B4A00"))
+    canvas.showPage()
+
+
+def build_client_visual():
+    output_path = OUT / "revenavi-client-guide.pdf"
+    page_width, page_height = (A4[1], A4[0])
+    canvas = pdfcanvas.Canvas(str(output_path), pagesize=(page_width, page_height), pageCompression=1)
+    canvas.setTitle("レベナビ 画面でわかる使い方")
+    canvas.setAuthor("レベナビ運営")
+
+    canvas.setFillColor(NAVY)
+    canvas.rect(0, 0, page_width, page_height, stroke=0, fill=1)
+    canvas.setFillColor(CYAN)
+    canvas.setFont(BOLD, 10)
+    canvas.drawString(20 * mm, page_height - 30 * mm, "はじめての方へ")
+    canvas.setFillColor(colors.white)
+    canvas.setFont(BOLD, 31)
+    canvas.drawString(20 * mm, page_height - 55 * mm, "レベナビ")
+    canvas.setFont(BOLD, 23)
+    canvas.drawString(20 * mm, page_height - 70 * mm, "画面でわかる使い方")
+    canvas.setFillColor(colors.HexColor("#DDEAFF"))
+    canvas.setFont(REGULAR, 11)
+    canvas.drawString(20 * mm, page_height - 86 * mm, "実際のアプリ画面に、押す場所と見る場所を直接示しました。")
+    canvas.setFillColor(colors.HexColor("#243A61"))
+    canvas.roundRect(20 * mm, 30 * mm, 255 * mm, 62 * mm, 7 * mm, stroke=0, fill=1)
+    canvas.setFillColor(colors.white)
+    canvas.setFont(BOLD, 13)
+    canvas.drawString(32 * mm, 75 * mm, "この冊子の使い方")
+    canvas.setFont(REGULAR, 10)
+    canvas.drawString(32 * mm, 61 * mm, "① 画面の青い番号を見つける")
+    canvas.drawString(32 * mm, 49 * mm, "② 右側の同じ番号の説明を読む")
+    canvas.drawString(32 * mm, 37 * mm, "③ 上から順番に操作する")
+    canvas.setFillColor(CYAN)
+    canvas.circle(232 * mm, 60 * mm, 16 * mm, stroke=0, fill=1)
+    canvas.setFillColor(NAVY)
+    canvas.setFont(BOLD, 24)
+    canvas.drawCentredString(232 * mm, 56 * mm, "1")
+    canvas.setFillColor(colors.HexColor("#AFC5E9"))
+    canvas.setFont(REGULAR, 8)
+    canvas.drawString(20 * mm, 16 * mm, "クライアント向け｜2026年8月版")
+    canvas.showPage()
+
+    visual_screen_page(canvas, "ログインする", "STEP 1", "login.png", [
+        "パスワードで入るときは、こちらを選びます。",
+        "メールのリンクだけで入ることもできます。",
+        "登録したメールアドレスを入力します。",
+        "パスワードを入れ、青い「ログイン」を押します。",
+        "忘れたときは、ここから新しいパスワードを設定できます。",
+    ], [(0.43, 0.25), (0.60, 0.25), (0.50, 0.36), (0.50, 0.52), (0.63, 0.61)], "メールは、最初に登録したアドレスを使います。")
+
+    visual_screen_page(canvas, "まず概要を見る", "STEP 2", "dashboard-overview.png", [
+        "左のメニューで、見たい画面を切り替えます。",
+        "右上の日付を変えると、その日の情報になります。",
+        "競合の平均価格です。空室がある宿だけで計算します。",
+        "この日の参考ランクと販売価格です。",
+        "「部屋なし」の競合数です。需要が強い目安になります。",
+        "下には、ランクの理由と大きな価格変化が出ます。",
+    ], [(0.12, 0.25), (0.89, 0.08), (0.33, 0.34), (0.60, 0.34), (0.90, 0.34), (0.58, 0.74)], "最初は「概要」だけ見れば大丈夫です。")
+
+    visual_screen_page(canvas, "参考価格の理由を確認する", "STEP 3", "dashboard-proposal.png", [
+        "選んだ日付と、参考ランクが表示されます。",
+        "空室がある競合施設の平均最安値を基にしています。",
+        "登録した販売価格表から、最も近いランクを示します。",
+        "値上げ・値下げ・部屋なしの変化を確認します。",
+    ], [(0.24, 0.36), (0.34, 0.62), (0.23, 0.48), (0.77, 0.49)], "これは参考情報です。価格が自動で書き換わることはありません。")
+
+    visual_screen_page(canvas, "競合の価格を比べる", "STEP 4", "dashboard-comparison.png", [
+        "左側に、登録した競合施設が並びます。",
+        "上の日付ごとに、その日の最安値を比べます。",
+        "赤は値上げ、青は値下げです。",
+        "グレーの「満室」は、予約できる部屋がない状態です。",
+    ], [(0.12, 0.55), (0.49, 0.23), (0.53, 0.55), (0.82, 0.55)], "「履歴なし」は故障ではありません。毎日取得すると比較できるようになります。")
+
+    visual_screen_page(canvas, "カレンダーで先の日付を見る", "STEP 5", "dashboard-calendar.png", [
+        "月の見出しを押すと、開いたり閉じたりできます。",
+        "日付ごとに、参考ランクと販売価格が出ます。",
+        "赤い背景は競合価格の上昇、青は低下の目安です。",
+        "各競合の価格や「部屋なし」も日付の中で確認できます。",
+        "通常プランでは3か月または6か月を表示できます。",
+    ], [(0.20, 0.15), (0.92, 0.35), (0.14, 0.53), (0.93, 0.46), (0.49, 0.81)], "日付を押すと、その日の参考価格の理由へ移動します。")
+
+    visual_screen_page(canvas, "販売ランクと競合施設を設定する", "STEP 6", "settings.png", [
+        "A〜Dの販売価格を入力します。Aが最も高い価格です。",
+        "必要ならE・Fなどのランクを追加できます。",
+        "比較する宿の名前と予約サイトURLを入力します。",
+        "通常プランでは3施設まで登録できます。",
+        "最後に必ず「変更を保存」を押します。",
+    ], [(0.39, 0.26), (0.09, 0.43), (0.49, 0.62), (0.89, 0.53), (0.91, 0.95)], "URLは、じゃらん・楽天トラベルなどの宿のページをそのまま貼り付けます。")
+
+    visual_screen_page(canvas, "毎日の確認は3分で終わります", "STEP 7", "dashboard-overview.png", [
+        "ログインしたら、まず競合平均価格を見ます。",
+        "次に、参考ランクと部屋なし件数を見ます。",
+        "気になる日はカレンダーから選びます。",
+        "理由を読んで、実際の販売価格を決めます。",
+    ], [(0.35, 0.34), (0.75, 0.35), (0.14, 0.30), (0.38, 0.72)], "迷ったときは、設定を変えずに運営担当へご連絡ください。")
+
+    canvas.save()
+
+
 def render_pages(pdf_name: str, folder_name: str):
     target = IMAGE_OUT / folder_name
     target.mkdir(parents=True, exist_ok=True)
@@ -260,13 +452,7 @@ def render_pages(pdf_name: str, folder_name: str):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    build(
-        "docs/CLIENT_GUIDE.md",
-        "revenavi-client-guide.pdf",
-        "はじめての方へ",
-        "画面を開くところから、毎日の見方まで。順番どおりに進められる、やさしい操作説明です。",
-        "クライアント向け｜2026年8月版",
-    )
+    build_client_visual()
     build(
         "docs/OPERATOR_MANUAL.md",
         "revenavi-operator-manual.pdf",
