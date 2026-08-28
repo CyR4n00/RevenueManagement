@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import axios from 'axios';
 import { userFacingErrorMessage } from './errorMessages';
+import { checkOtaPropertyUrl, OtaUrlHelp } from './OtaUrlHelp';
 
 interface Facility { id: string; name: string; address?: string; base_price: number; min_price: number; max_price: number; }
 interface OnboardingStatus { subscription_status: string; onboarding_complete: boolean; facility?: Facility | null; }
@@ -66,6 +67,8 @@ export function OnboardingGate({ apiBase, accessToken, onComplete }: { apiBase: 
     if (!completedCompetitors.length || completedCompetitors.some(item => !item.name.trim() || !item.url.trim())) {
       setError('比較する宿の名前と予約サイトURLを、少なくとも1件入力してください。'); return;
     }
+    const invalidUrl = completedCompetitors.map(item => checkOtaPropertyUrl(item.url)).find(item => !item.valid);
+    if (invalidUrl) { setError(invalidUrl.message); return; }
     setBusy(true); setError('');
     try {
       await axios.post(`${apiBase}/onboarding`, {
@@ -103,7 +106,7 @@ export function OnboardingGate({ apiBase, accessToken, onComplete }: { apiBase: 
             {rateRanks.length < 12 && <button type="button" onClick={addRank} className="mt-3 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">＋ ランク{String.fromCharCode(65 + rateRanks.length)}を追加</button>}
             <p className="mt-3 text-xs text-slate-500">最低価格・最高価格は、この表の末尾と先頭から自動設定されます。</p>
           </div>
-          <div><h2 className="font-semibold">競合施設</h2><p className="mt-1 text-xs text-slate-500">通常プランでは、許諾済みOTAの施設URLを最大3件登録できます。</p><div className="mt-3 space-y-3">{competitors.map((competitor, index) => <div key={index} className="grid gap-2 rounded-xl border bg-slate-50 p-3 md:grid-cols-[1fr_2fr_auto]"><input required placeholder="競合施設名" value={competitor.name} onChange={event => setCompetitors(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} className="rounded-lg border p-2 text-sm" /><input required type="url" placeholder="https://..." value={competitor.url} onChange={event => setCompetitors(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item))} className="rounded-lg border p-2 text-sm" />{competitors.length > 1 && <button type="button" onClick={() => setCompetitors(items => items.filter((_, itemIndex) => itemIndex !== index))} className="rounded-lg border px-3 text-sm">削除</button>}</div>)}</div>{competitors.length < 3 && <button type="button" onClick={() => setCompetitors(items => [...items, initialCompetitor()])} className="mt-3 text-sm font-semibold text-indigo-700 hover:underline">＋ 競合を追加</button>}</div>
+          <div><h2 className="font-semibold">競合施設</h2><p className="mt-1 text-xs text-slate-500">通常プランでは、許諾済みOTAの施設URLを最大3件登録できます。</p><OtaUrlHelp value={competitors.find(item => item.url.trim())?.url} /><div className="mt-3 space-y-3">{competitors.map((competitor, index) => { const urlCheck = checkOtaPropertyUrl(competitor.url); return <div key={index} className="grid gap-2 rounded-xl border bg-slate-50 p-3 md:grid-cols-[1fr_2fr_auto]"><input required placeholder="競合施設名" value={competitor.name} onChange={event => setCompetitors(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} className="rounded-lg border p-2 text-sm" /><label className="min-w-0"><input required type="url" placeholder="https://www.jalan.net/yad..." value={competitor.url} onChange={event => setCompetitors(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item))} className={`w-full rounded-lg border p-2 text-sm ${competitor.url && !urlCheck.valid ? 'border-red-400 bg-red-50' : ''}`} />{competitor.url && <span className={`mt-1 block text-xs ${urlCheck.valid ? 'text-emerald-700' : 'text-red-700'}`}>{urlCheck.message}</span>}</label>{competitors.length > 1 && <button type="button" onClick={() => setCompetitors(items => items.filter((_, itemIndex) => itemIndex !== index))} className="rounded-lg border px-3 text-sm">削除</button>}</div>; })}</div>{competitors.length < 3 && <button type="button" onClick={() => setCompetitors(items => [...items, initialCompetitor()])} className="mt-3 text-sm font-semibold text-indigo-700 hover:underline">＋ 競合を追加</button>}</div>
           {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}
           <button disabled={busy} className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 font-semibold text-white shadow-lg shadow-indigo-200 disabled:opacity-50">設定を保存して分析を開始</button>
         </form>}

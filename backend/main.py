@@ -2,6 +2,7 @@
 
 import datetime as dt
 import json
+import re
 from pathlib import Path
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse, urlunparse
@@ -174,6 +175,12 @@ def _parse_date(value: str) -> dt.date:
 
 def _canonical_url(url: str) -> str:
     parsed = urlparse(url)
+    jalan_match = re.search(r"/yad(\d+)(?:/|$)", parsed.path, flags=re.IGNORECASE)
+    if jalan_match and (parsed.hostname or "").lower() in {"jalan.net", "www.jalan.net"}:
+        return f"https://www.jalan.net/yad{jalan_match.group(1)}"
+    rakuten_match = re.search(r"/HOTEL/(\d+)(?:/|$)", parsed.path, flags=re.IGNORECASE)
+    if rakuten_match and (parsed.hostname or "").lower() == "travel.rakuten.co.jp":
+        return f"https://travel.rakuten.co.jp/HOTEL/{rakuten_match.group(1)}"
     path = parsed.path.rstrip("/") or "/"
     return urlunparse((parsed.scheme.lower(), parsed.netloc.lower(), path, "", "", ""))
 
@@ -185,6 +192,20 @@ def _validate_ota_url(url: str) -> OtaSourceRuntime:
     source = settings.source_for_url(url)
     if source is None:
         raise HTTPException(status_code=422, detail="現在対応している予約サイトのURLを入力してください")
+    property_patterns = {
+        "jalan": r"/yad\d+(?:/|$)",
+        "rakuten": r"/HOTEL/\d+(?:/|$)",
+        "booking": r"/hotel/",
+        "airbnb": r"/rooms/\d+(?:/|$)",
+    }
+    if not re.search(property_patterns[source.key], parsed.path, flags=re.IGNORECASE):
+        format_hint = {
+            "jalan": "じゃらんnetはURLに「/yad＋数字」が入った宿のページを入力してください",
+            "rakuten": "楽天トラベルはURLに「/HOTEL/数字」が入った宿のページを入力してください",
+            "booking": "Booking.comはURLに「/hotel/」が入った施設ページを入力してください",
+            "airbnb": "AirbnbはURLに「/rooms/数字」が入った施設ページを入力してください",
+        }
+        raise HTTPException(status_code=422, detail=format_hint[source.key])
     if source.status != "approved" or not source.actor_id or not settings.apify_api_token:
         raise HTTPException(status_code=422, detail=f"{source.name}は現在データ取得の準備中です")
     return source

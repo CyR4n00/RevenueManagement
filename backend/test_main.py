@@ -200,6 +200,22 @@ def test_read_facility():
     assert response.json()["name"] == "Test Facility"
 
 
+def test_ota_url_requires_an_individual_property_page():
+    import main
+
+    with pytest.raises(HTTPException) as error:
+        main._validate_ota_url("https://www.jalan.net/kankou/spt_guide000000000000/")
+    assert error.value.status_code == 422
+    assert "/yad＋数字" in error.value.detail
+
+
+def test_tracking_parameters_canonicalize_to_the_property():
+    import main
+
+    assert main._canonical_url("https://www.jalan.net/yad315667/plan/?vos=tracking") == "https://www.jalan.net/yad315667"
+    assert main._canonical_url("https://travel.rakuten.co.jp/HOTEL/14138/14138.html?f_teikei=test") == "https://travel.rakuten.co.jp/HOTEL/14138"
+
+
 def test_rejects_invalid_price_guardrail():
     reset_database()
     seed_ready_account()
