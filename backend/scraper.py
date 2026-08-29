@@ -81,7 +81,8 @@ class OTAScraper:
                     "stayDates": target_dates,
                     "adults": 2,
                     "currency": "JPY",
-                }
+                },
+                memory_mbytes=self.settings.apify_actor_memory_mbytes,
             )
             items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
         except Exception as exc:

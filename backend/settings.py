@@ -79,6 +79,7 @@ class Settings:
     daily_sync_minute: int
     sync_lookahead_days: int
     apify_monthly_run_limit: int
+    apify_actor_memory_mbytes: int
     operator_emails: tuple[str, ...]
     business_name: str
     business_representative: str
@@ -144,6 +145,10 @@ def get_settings() -> Settings:
         daily_sync_minute=int(os.getenv("DAILY_SYNC_MINUTE", "0")),
         sync_lookahead_days=max(1, min(90, int(os.getenv("SYNC_LOOKAHEAD_DAYS", "90")))),
         apify_monthly_run_limit=max(0, int(os.getenv("APIFY_MONTHLY_RUN_LIMIT", "0"))),
+        # The Actors are network-bound and do not need Apify's former 4 GiB
+        # default.  Two GiB keeps three Playwright pages stable while roughly
+        # halving compute-unit consumption per run.
+        apify_actor_memory_mbytes=max(1024, min(4096, int(os.getenv("APIFY_ACTOR_MEMORY_MBYTES", "2048")))),
         operator_emails=_csv_values("OPERATOR_EMAILS"),
         business_name=os.getenv("BUSINESS_NAME", "").strip(),
         business_representative=os.getenv("BUSINESS_REPRESENTATIVE", "").strip(),

@@ -125,6 +125,7 @@ $safeEnvironment = (@(
   "DAILY_SYNC_HOURS=9;18",
   "SYNC_LOOKAHEAD_DAYS=90",
   "APIFY_MONTHLY_RUN_LIMIT=$ApifyMonthlyRunLimit",
+  "APIFY_ACTOR_MEMORY_MBYTES=2048",
   "OPERATOR_EMAILS=$OperatorEmails",
   "BUSINESS_NAME=$BusinessName",
   "BUSINESS_REPRESENTATIVE=$BusinessRepresentative",
