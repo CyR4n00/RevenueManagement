@@ -3,23 +3,28 @@
   "name": "レベナビ 価格判断支援",
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "revenavi-icon-48.png",
+      "sizes": "48x48",
+      "type": "image/png"
     },
     {
-      "src": "logo192.png",
+      "src": "revenavi-icon-192.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo512.png",
+      "src": "revenavi-icon-512.png",
       "type": "image/png",
       "sizes": "512x512"
+    },
+    {
+      "src": "revenavi-icon-1024.png",
+      "type": "image/png",
+      "sizes": "1024x1024"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#071b52",
+  "background_color": "#071b52"
 }
