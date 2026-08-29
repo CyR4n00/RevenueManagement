@@ -282,7 +282,7 @@ def visual_header(canvas, title: str, step: str):
     canvas.drawRightString(page_width - 12 * mm, page_height - 12 * mm, "レベナビ｜画面でわかる使い方")
 
 
-def visual_screen_page(canvas, title: str, step: str, image_name: str, notes: list[str], markers: list[tuple[float, float]], tip: str):
+def visual_screen_page(canvas, title: str, step: str, image_name: str, notes: list[str], markers: list[tuple[float, ...]], tip: str):
     page_width, page_height = (A4[1], A4[0])
     visual_header(canvas, title, step)
     image = ImageReader(str(CLIENT_ASSETS / image_name))
@@ -301,20 +301,28 @@ def visual_screen_page(canvas, title: str, step: str, image_name: str, notes: li
     canvas.roundRect(screen_x - 1.5 * mm, draw_y - 1.5 * mm, draw_width + 3 * mm, draw_height + 3 * mm, 3 * mm, stroke=1, fill=0)
     canvas.drawImage(image, screen_x, draw_y, width=draw_width, height=draw_height, preserveAspectRatio=True, mask="auto")
 
-    for index, (nx, ny) in enumerate(markers, start=1):
+    for index, marker in enumerate(markers, start=1):
+        nx, ny = marker[0], marker[1]
+        if len(marker) == 4:
+            badge_nx, badge_ny = marker[2], marker[3]
+        else:
+            badge_nx, badge_ny = min(0.96, nx + 0.05), max(0.04, ny - 0.06)
         target_x = screen_x + nx * draw_width
         target_y = draw_y + (1 - ny) * draw_height
-        badge_x = target_x + 3.5 * mm
-        badge_y = target_y + 3.5 * mm
+        badge_x = screen_x + badge_nx * draw_width
+        badge_y = draw_y + (1 - badge_ny) * draw_height
         canvas.setStrokeColor(colors.white)
-        canvas.setLineWidth(3)
-        canvas.line(badge_x - 2 * mm, badge_y - 2 * mm, target_x, target_y)
+        canvas.setLineWidth(3.2)
+        canvas.line(badge_x, badge_y, target_x, target_y)
         canvas.setStrokeColor(BLUE)
-        canvas.setLineWidth(1.4)
-        canvas.line(badge_x - 2 * mm, badge_y - 2 * mm, target_x, target_y)
+        canvas.setLineWidth(1.2)
+        canvas.line(badge_x, badge_y, target_x, target_y)
+        canvas.setFillColor(BLUE)
+        canvas.circle(target_x, target_y, 0.9 * mm, stroke=0, fill=1)
         canvas.setFillColor(BLUE)
         canvas.setStrokeColor(colors.white)
-        canvas.circle(badge_x, badge_y, 4.3 * mm, stroke=1, fill=1)
+        canvas.setLineWidth(1.2)
+        canvas.circle(badge_x, badge_y, 3.8 * mm, stroke=1, fill=1)
         canvas.setFillColor(colors.white)
         canvas.setFont(BOLD, 8.5)
         canvas.drawCentredString(badge_x, badge_y - 2.7, str(index))
@@ -381,7 +389,7 @@ def build_client_visual():
     canvas.drawCentredString(232 * mm, 56 * mm, "1")
     canvas.setFillColor(colors.HexColor("#AFC5E9"))
     canvas.setFont(REGULAR, 8)
-    canvas.drawString(20 * mm, 16 * mm, "クライアント向け｜2026年8月版")
+    canvas.drawString(20 * mm, 16 * mm, "クライアント向け｜2026年8月29日改訂版")
     canvas.showPage()
 
     visual_screen_page(canvas, "ログインする", "STEP 1", "login.png", [
@@ -390,7 +398,7 @@ def build_client_visual():
         "登録したメールアドレスを入力します。",
         "パスワードを入れ、青い「ログイン」を押します。",
         "忘れたときは、ここから新しいパスワードを設定できます。",
-    ], [(0.43, 0.25), (0.60, 0.25), (0.50, 0.36), (0.50, 0.52), (0.63, 0.61)], "メールは、最初に登録したアドレスを使います。")
+    ], [(0.43, 0.25, 0.34, 0.18), (0.60, 0.25, 0.69, 0.18), (0.50, 0.36, 0.34, 0.36), (0.50, 0.52, 0.34, 0.52), (0.63, 0.61, 0.76, 0.66)], "届かないときは1分待ち、迷惑メールを確認します。")
 
     visual_screen_page(canvas, "まず概要を見る", "STEP 2", "dashboard-overview.png", [
         "左のメニューで、見たい画面を切り替えます。",
@@ -399,21 +407,21 @@ def build_client_visual():
         "この日の参考ランクと販売価格です。",
         "「部屋なし」の競合数です。需要が強い目安になります。",
         "下には、ランクの理由と大きな価格変化が出ます。",
-    ], [(0.12, 0.25), (0.89, 0.08), (0.33, 0.34), (0.60, 0.34), (0.90, 0.34), (0.58, 0.74)], "最初は「概要」だけ見れば大丈夫です。")
+    ], [(0.12, 0.25, 0.21, 0.20), (0.89, 0.08, 0.80, 0.04), (0.33, 0.34, 0.38, 0.24), (0.60, 0.34, 0.64, 0.24), (0.90, 0.34, 0.94, 0.24), (0.58, 0.74, 0.52, 0.65)], "最初は「概要」だけ見れば大丈夫です。")
 
     visual_screen_page(canvas, "参考価格の理由を確認する", "STEP 3", "dashboard-proposal.png", [
         "選んだ日付と、参考ランクが表示されます。",
         "空室がある競合施設の平均最安値を基にしています。",
         "登録した販売価格表から、最も近いランクを示します。",
         "値上げ・値下げ・部屋なしの変化を確認します。",
-    ], [(0.24, 0.36), (0.34, 0.62), (0.23, 0.48), (0.77, 0.49)], "これは参考情報です。価格が自動で書き換わることはありません。")
+    ], [(0.24, 0.36, 0.31, 0.28), (0.23, 0.70, 0.38, 0.76), (0.23, 0.48, 0.32, 0.46), (0.77, 0.49, 0.87, 0.40)], "これは参考情報です。価格が自動で書き換わることはありません。")
 
     visual_screen_page(canvas, "競合の価格を比べる", "STEP 4", "dashboard-comparison.png", [
         "左側に、登録した競合施設が並びます。",
         "上の日付ごとに、その日の最安値を比べます。",
         "赤は値上げ、青は値下げです。",
         "グレーの「満室」は、予約できる部屋がない状態です。",
-    ], [(0.12, 0.55), (0.49, 0.23), (0.53, 0.55), (0.82, 0.55)], "「履歴なし」は故障ではありません。毎日取得すると比較できるようになります。")
+    ], [(0.12, 0.55, 0.17, 0.45), (0.49, 0.23, 0.51, 0.14), (0.53, 0.55, 0.60, 0.45), (0.71, 0.66, 0.79, 0.58)], "「履歴なし」は故障ではありません。毎日取得すると比較できるようになります。")
 
     visual_screen_page(canvas, "カレンダーで先の日付を見る", "STEP 5", "dashboard-calendar.png", [
         "月の見出しを押すと、開いたり閉じたりできます。",
@@ -421,7 +429,7 @@ def build_client_visual():
         "赤い背景は競合価格の上昇、青は低下の目安です。",
         "各競合の価格や「部屋なし」も日付の中で確認できます。",
         "通常プランでは3か月または6か月を表示できます。",
-    ], [(0.20, 0.15), (0.92, 0.35), (0.14, 0.53), (0.93, 0.46), (0.49, 0.81)], "日付を押すと、その日の参考価格の理由へ移動します。")
+    ], [(0.20, 0.15, 0.28, 0.10), (0.92, 0.35, 0.82, 0.28), (0.14, 0.53, 0.21, 0.45), (0.92, 0.39, 0.82, 0.48), (0.49, 0.81, 0.60, 0.75)], "日付を押すと、その日の参考価格の理由へ移動します。")
 
     visual_screen_page(canvas, "販売ランクと競合施設を設定する", "STEP 6", "settings.png", [
         "A〜Dの販売価格を入力します。Aが最も高い価格です。",
@@ -429,14 +437,19 @@ def build_client_visual():
         "比較する宿の名前と予約サイトURLを入力します。",
         "通常プランでは3施設まで登録できます。",
         "最後に必ず「変更を保存」を押します。",
-    ], [(0.39, 0.26), (0.09, 0.43), (0.49, 0.62), (0.89, 0.53), (0.91, 0.95)], "URLは、じゃらん・楽天トラベルなどの宿のページをそのまま貼り付けます。")
+    ], [(0.39, 0.26, 0.52, 0.20), (0.09, 0.43, 0.20, 0.47), (0.49, 0.89, 0.67, 0.80), (0.93, 0.57, 0.82, 0.50), (0.91, 0.95, 0.80, 0.89)], "URLは、じゃらん・楽天トラベルなどの宿のページをそのまま貼り付けます。")
 
-    visual_screen_page(canvas, "毎日の確認は3分で終わります", "STEP 7", "dashboard-overview.png", [
+    visual_screen_page(canvas, "領収書・請求書を確認する", "STEP 7", "settings.png", [
+        "カード払いの契約内容は、この設定画面から確認できます。",
+        "下の「契約を管理」を押し、Stripeの請求履歴から書類を保存します。",
+    ], [(0.18, 0.08, 0.30, 0.13), (0.78, 0.95, 0.67, 0.88)], "銀行振込の領収書は、運営担当へ発行を依頼してください。")
+
+    visual_screen_page(canvas, "毎日の確認は3分で終わります", "STEP 8", "dashboard-overview.png", [
         "ログインしたら、まず競合平均価格を見ます。",
         "次に、参考ランクと部屋なし件数を見ます。",
         "気になる日はカレンダーから選びます。",
         "理由を読んで、実際の販売価格を決めます。",
-    ], [(0.35, 0.34), (0.75, 0.35), (0.14, 0.30), (0.38, 0.72)], "迷ったときは、設定を変えずに運営担当へご連絡ください。")
+    ], [(0.35, 0.34, 0.42, 0.25), (0.75, 0.35, 0.78, 0.24), (0.14, 0.30, 0.21, 0.37), (0.38, 0.72, 0.47, 0.64)], "迷ったときは、設定を変えずに運営担当へご連絡ください。")
 
     canvas.save()
 

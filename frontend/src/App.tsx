@@ -196,6 +196,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showOperator, setShowOperator] = useState(false);
   const [operatorAvailable, setOperatorAvailable] = useState(false);
+  const [operatorChecked, setOperatorChecked] = useState(!authIsConfigured);
   const [currentHash, setCurrentHash] = useState(window.location.hash);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -264,11 +265,13 @@ function App() {
 
   useEffect(() => { if (dashboardReady) void fetchData(); }, [selectedDate, comparisonDays, horizonDays, dashboardReady, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!dashboardReady || !session) { setOperatorAvailable(false); return; }
+    if (!session) { setOperatorAvailable(false); setOperatorChecked(true); return; }
+    setOperatorChecked(false);
     void axios.get(`${API_BASE}/operator/summary`, { headers: { Authorization: `Bearer ${session.access_token}` } })
       .then(() => setOperatorAvailable(true))
-      .catch(() => setOperatorAvailable(false));
-  }, [dashboardReady, session]);
+      .catch(() => setOperatorAvailable(false))
+      .finally(() => setOperatorChecked(true));
+  }, [session]);
   useEffect(() => { setFocusedDate(selectedDate); }, [selectedDate]);
 
   const signOut = () => { if (supabase) void supabase.auth.signOut(); };
@@ -279,6 +282,8 @@ function App() {
   if (authLoading) return <main className="min-h-screen bg-slate-50 p-8"><p className="mx-auto max-w-md rounded border bg-white p-5 text-sm">ログイン状態を確認しています…</p></main>;
   if (authIsConfigured && !session) return <AuthGate />;
   if (passwordRecovery) return <PasswordRecovery onDone={() => setPasswordRecovery(false)} />;
+  if (authIsConfigured && session && !dashboardReady && !operatorChecked) return <main className="min-h-screen bg-slate-950 p-8"><p className="mx-auto max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 text-sm text-white">運営者権限を確認しています…</p></main>;
+  if (authIsConfigured && session && !dashboardReady && operatorAvailable) return <main className="min-h-screen bg-slate-950 p-3 md:p-8"><div className="mx-auto max-w-6xl"><OperatorPanel apiBase={API_BASE} accessToken={session.access_token} onClose={signOut} /></div></main>;
   if (authIsConfigured && session && !dashboardReady) return <OnboardingGate apiBase={API_BASE} accessToken={session.access_token} onComplete={() => setDashboardReady(true)} />;
 
   const competitors = registeredCompetitors.length ? registeredCompetitors.map(item => item.name || '競合施設') : Array.from(new Set(marketData.map(item => item.competitor_name)));

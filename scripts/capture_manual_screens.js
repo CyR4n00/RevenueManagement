@@ -17,7 +17,7 @@ function addDays(date, days) {
 
 const start = new Date('2026-08-29T00:00:00Z');
 const competitors = [
-  { id: 'comp-1', name: '山水旅館', url: 'https://www.jalan.net/yad315667/plan/' },
+  { id: 'comp-1', name: '山木旅館', url: 'https://www.jalan.net/yad315667/plan/' },
   { id: 'comp-2', name: '源泉湯宿 大成館', url: 'https://www.jalan.net/yad339712/plan/' },
   { id: 'comp-3', name: '後楽園ホテル', url: 'https://travel.rakuten.co.jp/HOTEL/12345/12345.html' },
 ];
@@ -61,7 +61,7 @@ const responses = {
   '/market_data': market,
   '/market_data/cached': market,
   '/alerts': [
-    { id: 1, date: isoDate(start), message: '山水旅館が前回より1,200円値上げしました。', type: 'increase' },
+    { id: 1, date: isoDate(start), message: '山木旅館が前回より1,200円値上げしました。', type: 'increase' },
     { id: 2, date: isoDate(addDays(start, 8)), message: '後楽園ホテルが部屋なしになりました。', type: 'sold_out' },
   ],
   '/recommendations': recommendations,
