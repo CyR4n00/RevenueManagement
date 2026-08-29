@@ -8,7 +8,6 @@ import { SettingsPanel } from './SettingsPanel';
 import { OperatorPanel } from './OperatorPanel';
 import { PublicPages, PublicPageName } from './PublicPages';
 import { authIsConfigured, runtimeConfig, supabase } from './supabase';
-import { userFacingErrorMessage } from './errorMessages';
 
 const API_BASE = runtimeConfig.apiUrl
   || process.env.REACT_APP_API_URL
@@ -19,6 +18,8 @@ interface Alert { id: number; date: string; message: string; type: 'increase' | 
 interface Recommendation { date: string; suggested_price: number; suggested_rank: string; reasoning: string; }
 interface RegisteredCompetitor { id: string; name: string | null; url: string; }
 interface BillingStatus { configured: boolean; subscription_status: string; plan: 'standard' | 'upgrade'; max_horizon_days: number; }
+interface IntegrationStatus { email_delivery_configured: boolean; }
+interface CollectionStatus { status: 'ready' | 'attention' | 'not_started'; message: string; last_success_at: string | null; last_attempt_at: string | null; successful_runs_7d: number; failed_runs_7d: number; collected_stay_dates: number; competitor_count: number; scheduled_hours: number[]; }
 
 function localDate(value = new Date()) {
   const year = value.getFullYear();
@@ -35,6 +36,13 @@ function addDays(value: string, amount: number) {
 }
 
 function today() { return localDate(); }
+
+function dateTimeLabel(value: string | null | undefined) {
+  if (!value) return 'まだありません';
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(new Date(value));
+}
 
 function datesByMonth(dates: string[]) {
   return dates.reduce<Record<string, string[]>>((groups, date) => {
@@ -208,6 +216,8 @@ function App() {
   const [comparisonDays, setComparisonDays] = useState<1 | 7 | 30>(1);
   const [horizonDays, setHorizonDays] = useState<90 | 180 | 365>(90);
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
+  const [collectionStatus, setCollectionStatus] = useState<CollectionStatus | null>(null);
 
   useEffect(() => {
     if (!supabase) return;
@@ -234,30 +244,20 @@ function App() {
   const fetchData = async () => {
     setLoading(true); setError(''); setWarning('');
     try {
-      // Start the permitted Actor collection in the background. Cached rows
-      // must remain usable while a 90-day Actor run is still processing or
-      // when Apify is temporarily unavailable.
-      const collectionRequest = axios.get<CompetitorPrice[]>(`${API_BASE}/market_data`, { params: { start_date: selectedDate, days: Math.min(horizonDays, 90) }, headers: authHeaders });
-      const [market, alert, recs, competitorData, billing] = await Promise.all([
+      // Opening or refreshing the dashboard must never consume an Apify run.
+      // Collection is owned by Cloud Scheduler; customers only read cached rows.
+      const [market, alert, recs, competitorData, billing, integration, collection] = await Promise.all([
         axios.get<CompetitorPrice[]>(`${API_BASE}/market_data/cached`, { params: { start_date: selectedDate, days: horizonDays, comparison_days: comparisonDays }, headers: authHeaders }),
         axios.get<Alert[]>(`${API_BASE}/alerts`, { params: { start_date: selectedDate, days: 7, comparison_days: comparisonDays }, headers: authHeaders }),
         axios.get<Recommendation[]>(`${API_BASE}/recommendations`, { params: { start_date: selectedDate, days: horizonDays, comparison_days: comparisonDays }, headers: authHeaders }),
         axios.get<RegisteredCompetitor[]>(`${API_BASE}/competitors`, { headers: authHeaders }),
         axios.get<BillingStatus>(`${API_BASE}/billing/status`, { headers: authHeaders }),
+        axios.get<IntegrationStatus>(`${API_BASE}/integrations/status`, { headers: authHeaders }),
+        axios.get<CollectionStatus>(`${API_BASE}/collection/status`, { headers: authHeaders }),
       ]);
       const recommendationRows = Array.isArray(recs.data) ? recs.data : [];
       setMarketData(market.data); setAlerts(alert.data); setRecommendations(recommendationRows); setRecommendation(recommendationRows[0] || null); setRegisteredCompetitors(competitorData.data); setBillingStatus(billing.data);
-      void collectionRequest.then(async () => {
-        const [freshMarket, freshRecommendations] = await Promise.all([
-          axios.get<CompetitorPrice[]>(`${API_BASE}/market_data/cached`, { params: { start_date: selectedDate, days: horizonDays, comparison_days: comparisonDays }, headers: authHeaders }),
-          axios.get<Recommendation[]>(`${API_BASE}/recommendations`, { params: { start_date: selectedDate, days: horizonDays, comparison_days: comparisonDays }, headers: authHeaders }),
-        ]);
-        const freshRows = Array.isArray(freshRecommendations.data) ? freshRecommendations.data : [];
-        setMarketData(freshMarket.data); setRecommendations(freshRows); setRecommendation(freshRows[0] || null); setWarning('');
-      }).catch((collectionError: any) => {
-        if (collectionError?.response?.status === 401) setError('ログインの有効期限が切れました。再度ログインしてください。');
-        else setWarning(userFacingErrorMessage(collectionError, '最新データの取得に失敗しました。保存済みデータを表示しています。'));
-      });
+      setIntegrationStatus(integration.data); setCollectionStatus(collection.data);
     } catch (requestError: any) {
       setError(requestError?.response?.status === 401 ? 'ログインの有効期限が切れました。再度ログインしてください。' : 'データを取得できませんでした。接続設定を確認してください。');
     } finally { setLoading(false); }
@@ -307,7 +307,8 @@ function App() {
     {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
     {warning && <p role="status" className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{warning}</p>}
     {hasSimulation && <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">これはデモ用の疑似データです。本番ではApifyと許諾済みOTAのデータだけを利用します。</p>}
-    <section id="overview"><div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-black">今日の市場スナップショット</h2><p className="text-xs text-slate-500">{dateLabel(focusedDate).label}の競合市場</p></div><span className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${marketData.length ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}><i className="ai-pulse" />{loading ? '取得中' : marketData.length ? `実データ ${analysedDates}日` : 'データ未取得'}</span></div><div className="overview-grid">
+    {collectionStatus && <section aria-label="データ更新状況" className={`rounded-xl border p-4 ${collectionStatus.status === 'ready' ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className={`text-sm font-bold ${collectionStatus.status === 'ready' ? 'text-emerald-800' : 'text-amber-900'}`}>{collectionStatus.status === 'ready' ? '自動取得は正常です' : collectionStatus.status === 'not_started' ? '初回データを待っています' : '自動取得を確認しています'}</p><p className="mt-1 text-xs text-slate-700">{collectionStatus.message}</p><p className="mt-1 text-xs text-slate-500">最終成功：{dateTimeLabel(collectionStatus.last_success_at)} ／ 直近7日：成功{collectionStatus.successful_runs_7d}回・失敗{collectionStatus.failed_runs_7d}回</p></div><button type="button" onClick={() => void fetchData()} disabled={loading} className="shrink-0 rounded-lg border bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">{loading ? '確認中…' : '表示を更新'}</button></div></section>}
+    <section id="overview"><div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-black">今日の市場スナップショット</h2><p className="text-xs text-slate-500">{dateLabel(focusedDate).label}の競合市場</p></div><span className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${marketData.length ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}><i className="ai-pulse" />{loading ? '表示更新中' : marketData.length ? `実データ ${analysedDates}日` : 'データ未取得'}</span></div><div className="overview-grid">
       <article className="portfolio-card"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold text-slate-500">競合平均価格</p><p className="mt-2 text-3xl font-black">{marketAverage === null ? '—' : `¥${marketAverage.toLocaleString()}`}</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${averageMovement !== null && averageMovement > 0 ? 'bg-red-50 text-red-700' : averageMovement !== null && averageMovement < 0 ? 'bg-blue-50 text-blue-700' : 'bg-white/70 text-slate-500'}`}>{averageMovement === null ? '比較履歴なし' : `${averageMovement >= 0 ? '+' : ''}¥${averageMovement.toLocaleString()}`}</span></div><svg viewBox="0 0 420 95" className="mt-6 h-24 w-full" preserveAspectRatio="none" aria-hidden="true"><path d="M0 72 C38 68 55 76 88 61 S145 65 174 48 S231 54 267 37 S326 43 355 25 S395 33 420 12" fill="none" stroke="#7db7db" strokeWidth="3" /><path d="M0 72 C38 68 55 76 88 61 S145 65 174 48 S231 54 267 37 S326 43 355 25 S395 33 420 12 L420 95 L0 95Z" fill="rgba(125,183,219,.13)" /></svg><div className="flex items-center justify-between text-[11px] font-semibold text-slate-400"><span>{registeredCompetitors.length}施設</span><span>{analysedDates}日取得済み</span><span>{movementSignals}変動</span></div></article>
       <article className="asset-card bg-[#e8def4]"><p className="text-xs font-bold text-slate-500">参考ランク</p><p className="mt-4 text-4xl font-black">{focusedRecommendation?.suggested_rank || '—'}</p><p className="mt-2 text-sm font-bold">{focusedRecommendation ? `¥${focusedRecommendation.suggested_price.toLocaleString()}` : '未算出'}</p><span className="mt-auto inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg">✦</span></article>
       <article className="asset-card bg-[#dcefdc]"><p className="text-xs font-bold text-slate-500">価格変動</p><p className="mt-4 text-2xl font-black">{averageMovement === null ? '—' : `${averageMovement >= 0 ? '↑' : '↓'} ¥${Math.abs(averageMovement).toLocaleString()}`}</p><p className="mt-2 text-xs font-semibold text-emerald-800">{comparisonDays === 1 ? '前日比' : comparisonDays === 7 ? '先週比' : '先月比'}の平均</p><span className="mt-auto inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg">↗</span></article>
@@ -315,7 +316,7 @@ function App() {
     </div></section>
     <details id="proposal" open className="group rounded-2xl border border-slate-200 bg-white shadow-sm">
       <summary className="flex cursor-pointer list-none items-center justify-between p-4"><div><h2 className="font-bold">参考価格・アラート</h2><p className="text-xs text-slate-500">競合価格から算出した参考ランクと重要な価格変動</p></div><span aria-hidden="true" className="text-lg text-slate-500 transition-transform group-open:rotate-180">▼</span></summary>
-      <section className="grid gap-6 border-t p-4 lg:grid-cols-3"><article id="focused-proposal" className="ai-proposal relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-900 p-5 text-white shadow-xl"><div className="ai-scan" /><div className="relative"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold tracking-[0.18em] text-cyan-300">市場参考値</p><span className="flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-1 text-[10px] font-bold text-emerald-300"><i className="ai-pulse" />ルール計算完了</span></div><p className="mt-1 text-xs text-indigo-200">対象日 · {dateLabel(focusedDate).label}</p>{focusedRecommendation ? <><div className="mt-5 flex items-end gap-3"><p className="text-6xl font-black leading-none">{focusedRecommendation.suggested_rank}</p><div><p className="text-xs text-indigo-200">参考ランク</p><p className="text-xl font-bold">¥{focusedRecommendation.suggested_price.toLocaleString()}</p></div></div><div className="mt-5 rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur"><p className="text-xs font-bold text-cyan-200">算出根拠</p><p className="mt-2 text-sm leading-relaxed text-indigo-50">{focusedRecommendation.reasoning}</p></div><p className="mt-3 text-[11px] leading-relaxed text-indigo-200">競合状況を基にした参考値です。販売価格を自動変更するものではありません。</p></> : <p className="mt-5">この日付のデータは未取得です。</p>}</div></article><article className="rounded-xl border bg-white p-5 shadow-sm lg:col-span-2"><div className="flex items-center justify-between"><h2 className="font-bold">価格変動アラート</h2><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">画面内通知</span></div><div className="mt-4 space-y-2">{alerts.length ? alerts.map(alert => <p key={alert.id} className={`rounded border-l-4 p-3 text-sm ${alert.type === 'increase' ? 'border-red-500 bg-red-50' : alert.type === 'decrease' ? 'border-blue-500 bg-blue-50' : 'border-slate-500 bg-slate-100'}`}>{alert.message}</p>) : <p className="py-8 text-center text-sm text-slate-400">対象期間に大きな変化はありません。</p>}</div><p className="mt-4 border-t pt-3 text-xs text-slate-500">メール通知は未接続です。現在はこのダッシュボード内にのみ表示されます。</p></article></section>
+      <section className="grid gap-6 border-t p-4 lg:grid-cols-3"><article id="focused-proposal" className="ai-proposal relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-900 p-5 text-white shadow-xl"><div className="ai-scan" /><div className="relative"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold tracking-[0.18em] text-cyan-300">市場参考値</p><span className="flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-1 text-[10px] font-bold text-emerald-300"><i className="ai-pulse" />ルール計算完了</span></div><p className="mt-1 text-xs text-indigo-200">対象日 · {dateLabel(focusedDate).label}</p>{focusedRecommendation ? <><div className="mt-5 flex items-end gap-3"><p className="text-6xl font-black leading-none">{focusedRecommendation.suggested_rank}</p><div><p className="text-xs text-indigo-200">参考ランク</p><p className="text-xl font-bold">¥{focusedRecommendation.suggested_price.toLocaleString()}</p></div></div><div className="mt-5 rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur"><p className="text-xs font-bold text-cyan-200">算出根拠</p><p className="mt-2 text-sm leading-relaxed text-indigo-50">{focusedRecommendation.reasoning}</p></div><p className="mt-3 text-[11px] leading-relaxed text-indigo-200">競合状況を基にした参考値です。販売価格を自動変更するものではありません。</p></> : <p className="mt-5">この日付のデータは未取得です。</p>}</div></article><article className="rounded-xl border bg-white p-5 shadow-sm lg:col-span-2"><div className="flex items-center justify-between"><h2 className="font-bold">価格変動アラート</h2><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{integrationStatus?.email_delivery_configured ? '画面＋メール通知' : '画面内通知'}</span></div><div className="mt-4 space-y-2">{alerts.length ? alerts.map(alert => <p key={alert.id} className={`rounded border-l-4 p-3 text-sm ${alert.type === 'increase' ? 'border-red-500 bg-red-50' : alert.type === 'decrease' ? 'border-blue-500 bg-blue-50' : 'border-slate-500 bg-slate-100'}`}>{alert.message}</p>) : <p className="py-8 text-center text-sm text-slate-400">対象期間に大きな変化はありません。</p>}</div><p className="mt-4 border-t pt-3 text-xs text-slate-500">{integrationStatus?.email_delivery_configured ? '重要な変化は、登録済みのログインメールにも送信されます。' : 'メール配信は準備中です。現在はこのダッシュボード内に表示されます。'}</p></article></section>
     </details>
     <details id="tower" open className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><summary className="flex cursor-pointer list-none items-center justify-between border-b p-5"><div><h2 className="font-black">レベニュータワー</h2><p className="text-xs text-slate-500">{comparisonDays === 1 ? '前日比' : comparisonDays === 7 ? '先週比' : '先月比'}：値上げは赤、値下げは青、満室はグレー</p></div><span aria-hidden="true" className="text-lg transition-transform group-open:rotate-180">▼</span></summary><div className="overflow-x-auto"><table className="w-full min-w-[780px] border-collapse text-sm"><thead><tr><th className="sticky left-0 z-20 min-w-44 border-b border-r bg-slate-50 p-3 text-left shadow-[4px_0_8px_-6px_rgba(15,23,42,.45)]">競合施設</th>{dates.map(date => <th key={date} className="min-w-24 border-b bg-slate-50 p-3 text-center">{date.slice(5).replace('-', '/')}</th>)}</tr></thead><tbody>{competitors.map(competitor => <tr key={competitor}><th className="sticky left-0 z-10 min-w-44 border-b border-r bg-white p-3 text-left shadow-[4px_0_8px_-6px_rgba(15,23,42,.45)]">{competitor}</th>{dates.map(date => { const item = marketData.find(data => data.competitor_name === competitor && data.date === date); if (!item) return <td key={date} className="border-b p-3 text-center">—</td>; if (item.is_fully_booked) return <td key={date} className="border-b bg-slate-100 p-3 text-center text-slate-500">満室</td>; const color = item.difference > 0 ? 'bg-red-50 text-red-700' : item.difference < 0 ? 'bg-blue-50 text-blue-700' : ''; return <td key={date} className={`border-b p-3 text-center ${color}`}><strong>¥{item.price_today.toLocaleString()}</strong><br /><small>{item.comparison_available ? `${item.difference >= 0 ? '+' : ''}${item.difference.toLocaleString()}` : '履歴なし'}</small></td>; })}</tr>)}</tbody></table></div></details>
     <details open className="group rounded-xl border bg-white shadow-sm"><summary className="flex cursor-pointer list-none items-center justify-between p-4"><div><h2 className="font-bold">表示期間</h2><p className="text-xs text-slate-500">通常プランは最大6か月、アップグレードプランは最大1年間です。</p></div><span aria-hidden="true" className="text-lg text-slate-500 transition-transform group-open:rotate-180">▼</span></summary><div className="flex flex-wrap gap-2 border-t p-4">{([90, 180, 365] as const).map(days => { const locked = days > (billingStatus?.max_horizon_days || 180); return <button key={days} type="button" onClick={() => !locked && setHorizonDays(days)} disabled={loading || locked} title={locked ? 'アップグレードプランで利用できます' : undefined} className={`rounded-lg border px-4 py-2 text-sm font-semibold ${horizonDays === days ? 'border-blue-600 bg-blue-600 text-white' : locked ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>{days === 90 ? '3か月' : days === 180 ? '6か月' : '1年（アップグレード）'}</button>; })}</div></details>

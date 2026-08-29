@@ -162,8 +162,8 @@ $refreshJob = "$ServiceName-refresh"
 $futureJob = "$ServiceName-future"
 $refreshArgs = "--args=sync_job.py,--mode,refresh"
 $futureArgs = "--args=sync_job.py,--mode,future"
-$null = Invoke-Gcloud run jobs deploy $refreshJob --image $Image --region $Region --service-account $runtimeEmail --command=python $refreshArgs --set-env-vars $jobEnvironment --set-secrets $secretBindings --task-timeout 30m --max-retries 1
-$null = Invoke-Gcloud run jobs deploy $futureJob --image $Image --region $Region --service-account $runtimeEmail --command=python $futureArgs --set-env-vars $jobEnvironment --set-secrets $secretBindings --task-timeout 30m --max-retries 1
+$null = Invoke-Gcloud run jobs deploy $refreshJob --image $Image --region $Region --service-account $runtimeEmail --command=python $refreshArgs --set-env-vars $jobEnvironment --set-secrets $secretBindings --task-timeout 30m --max-retries 0
+$null = Invoke-Gcloud run jobs deploy $futureJob --image $Image --region $Region --service-account $runtimeEmail --command=python $futureArgs --set-env-vars $jobEnvironment --set-secrets $secretBindings --task-timeout 30m --max-retries 0
 
 $schedulerAccount = "$ServiceName-scheduler"
 $schedulerEmail = "$schedulerAccount@$ProjectId.iam.gserviceaccount.com"

@@ -340,6 +340,18 @@ class IntegrationStatus(BaseModel):
     ota_sources: list["OtaSourceStatus"]
 
 
+class CollectionStatus(BaseModel):
+    status: Literal["ready", "attention", "not_started"]
+    message: str
+    last_success_at: dt.datetime | None = None
+    last_attempt_at: dt.datetime | None = None
+    successful_runs_7d: int = 0
+    failed_runs_7d: int = 0
+    collected_stay_dates: int = 0
+    competitor_count: int = 0
+    scheduled_hours: list[int] = Field(default_factory=list)
+
+
 class OtaSourceStatus(BaseModel):
     key: str
     name: str

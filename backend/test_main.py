@@ -407,3 +407,42 @@ def test_future_scheduler_rotates_one_31_day_chunk(monkeypatch):
     assert 31 <= (start - dt.date.today()).days < 180
     assert 1 <= days <= 31
     assert refresh is True
+
+
+def test_customer_collection_status_reports_latest_success():
+    reset_database()
+    seed_ready_account(with_competitor=True)
+    now = dt.datetime.now(dt.timezone.utc)
+    with TestSession() as db:
+        db.add(models.DBCompetitorCollectionRun(
+            competitor_id="competitor-1", collection_day=dt.date.today(), slot=1,
+            started_at=now - dt.timedelta(minutes=2), completed_at=now,
+            status="succeeded", records_collected=90,
+        ))
+        db.add(models.DBCompetitorPrice(
+            competitor_id="competitor-1", stay_date=dt.date.today(), price_jpy=12_000,
+            is_fully_booked=False, availability_status="available",
+            availability_source="inferred", collected_at=now, collection_source="apify",
+        ))
+        db.commit()
+    with TestClient(app) as client:
+        response = client.get("/collection/status")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+    assert response.json()["successful_runs_7d"] == 1
+    assert response.json()["collected_stay_dates"] == 1
+
+
+def test_cloud_job_can_fail_visibly_after_facility_error(monkeypatch):
+    reset_database()
+    seed_ready_account()
+    import main
+    import scheduler
+
+    monkeypatch.setattr(
+        main, "collect_market_data",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+    )
+    monkeypatch.setattr(scheduler, "SessionLocal", TestSession)
+    with pytest.raises(RuntimeError, match="failed for 1 facility"):
+        scheduler.scheduled_scraping_job(mode="refresh", raise_on_failure=True)

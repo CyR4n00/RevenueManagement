@@ -85,8 +85,11 @@ class OTAScraper:
                 memory_mbytes=self.settings.apify_actor_memory_mbytes,
             )
             items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-        except Exception as exc:
-            raise DataCollectionError("Apify run failed") from exc
+        except Exception:
+            # Provider exceptions can include an Authorization header in their
+            # repr.  Do not chain them into Cloud Logging where a token could
+            # be exposed; the customer-facing/run-level error is sufficient.
+            raise DataCollectionError("Apify run failed") from None
 
         if not items:
             raise DataCollectionError("Apify actor returned no offers")

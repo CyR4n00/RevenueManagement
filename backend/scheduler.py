@@ -14,11 +14,12 @@ logger = logging.getLogger(__name__)
 _scheduler = BackgroundScheduler(timezone="Asia/Tokyo")
 
 
-def scheduled_scraping_job(mode: str = "refresh"):
+def scheduled_scraping_job(mode: str = "refresh", *, raise_on_failure: bool = False):
     # Imported here to avoid a module cycle during FastAPI application creation.
     from main import _subscription_plan, collect_market_data, create_alerts
     from models import DBFacility, DBNotificationDelivery, DBOrganization, DBSubscription
 
+    failures: list[str] = []
     with SessionLocal() as db:
         today = dt.date.today()
         for facility in db.query(DBFacility).filter(DBFacility.onboarding_completed_at.is_not(None)).all():
@@ -73,8 +74,11 @@ def scheduled_scraping_job(mode: str = "refresh"):
                     db.commit()
             except Exception:
                 db.rollback()
+                failures.append(str(facility.id))
                 logger.exception("Scheduled market sync failed for facility %s", facility.id)
         logger.info("Scheduled market sync completed")
+    if failures and raise_on_failure:
+        raise RuntimeError(f"Scheduled market sync failed for {len(failures)} facility/facilities")
 
 
 def start_scheduler():

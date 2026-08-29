@@ -25,4 +25,7 @@ test('renders app header', async () => {
   });
   const headerElement = screen.getByRole('heading', { name: '価格分析ダッシュボード' });
   expect(headerElement).toBeInTheDocument();
+  const requestedUrls = (axios.get as jest.Mock).mock.calls.map(([url]) => url);
+  expect(requestedUrls.some((url) => url.endsWith('/market_data/cached'))).toBe(true);
+  expect(requestedUrls.some((url) => url.endsWith('/market_data'))).toBe(false);
 });

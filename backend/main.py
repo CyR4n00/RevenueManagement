@@ -669,6 +669,80 @@ def integration_status():
     )
 
 
+@app.get("/collection/status", response_model=models.CollectionStatus)
+def collection_status(
+    user: CurrentUser = Depends(require_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return a tenant-scoped, customer-readable collection health summary."""
+    facility = _ready_facility(db, user)
+    competitor_ids = [
+        row[0] for row in db.query(models.DBCompetitor.id).filter_by(
+            facility_id=facility.id, is_active=True,
+        ).all()
+    ]
+    schedule = list(settings.daily_sync_hours)
+    if not competitor_ids:
+        return models.CollectionStatus(
+            status="not_started",
+            message="比較する宿が未登録のため、データ取得はまだ始まっていません。",
+            scheduled_hours=schedule,
+        )
+
+    runs = db.query(models.DBCompetitorCollectionRun).filter(
+        models.DBCompetitorCollectionRun.competitor_id.in_(competitor_ids),
+    )
+    last_attempt = runs.order_by(models.DBCompetitorCollectionRun.started_at.desc()).first()
+    last_success = runs.filter(
+        models.DBCompetitorCollectionRun.status == "succeeded",
+    ).order_by(models.DBCompetitorCollectionRun.completed_at.desc()).first()
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7)
+    successful_runs = runs.filter(
+        models.DBCompetitorCollectionRun.status == "succeeded",
+        models.DBCompetitorCollectionRun.started_at >= cutoff,
+    ).count()
+    failed_runs = runs.filter(
+        models.DBCompetitorCollectionRun.status == "failed",
+        models.DBCompetitorCollectionRun.started_at >= cutoff,
+    ).count()
+    collected_dates = db.query(models.DBCompetitorPrice.stay_date).filter(
+        models.DBCompetitorPrice.competitor_id.in_(competitor_ids),
+    ).distinct().count()
+
+    def aware(value: dt.datetime | None) -> dt.datetime | None:
+        if value is None or value.tzinfo is not None:
+            return value
+        return value.replace(tzinfo=dt.timezone.utc)
+
+    success_at = aware(last_success.completed_at or last_success.started_at) if last_success else None
+    attempt_at = aware(last_attempt.started_at) if last_attempt else None
+    stale = success_at is None or success_at < dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=36)
+    last_attempt_failed = bool(
+        last_attempt and last_attempt.status == "failed"
+        and (success_at is None or (attempt_at is not None and attempt_at > success_at))
+    )
+    if last_attempt_failed:
+        state = "attention"
+        message = "直近の自動取得に失敗しました。保存済みデータは表示できます。運営者が確認中です。"
+    elif stale:
+        state = "attention" if last_attempt else "not_started"
+        message = "最新データの到着を待っています。画面を閉じていても自動取得は続きます。"
+    else:
+        state = "ready"
+        message = "自動取得は正常です。画面を閉じていても毎日更新されます。"
+    return models.CollectionStatus(
+        status=state,
+        message=message,
+        last_success_at=success_at,
+        last_attempt_at=attempt_at,
+        successful_runs_7d=successful_runs,
+        failed_runs_7d=failed_runs,
+        collected_stay_dates=collected_dates,
+        competitor_count=len(competitor_ids),
+        scheduled_hours=schedule,
+    )
+
+
 @app.get("/public/legal-config")
 def public_legal_config():
     """Expose only business details that are intended for public legal pages."""
