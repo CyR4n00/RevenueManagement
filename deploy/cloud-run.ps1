@@ -122,6 +122,7 @@ $safeEnvironment = (@(
   "DEMO_BYPASS_BILLING=false",
   "ALERT_FROM_EMAIL=$AlertFromEmail",
   "SCHEDULER_ENABLED=false",
+  "DAILY_SYNC_HOURS=9;18",
   "SYNC_LOOKAHEAD_DAYS=90",
   "APIFY_MONTHLY_RUN_LIMIT=$ApifyMonthlyRunLimit",
   "OPERATOR_EMAILS=$OperatorEmails",
@@ -158,8 +159,10 @@ $null = Invoke-Gcloud run services update $ServiceName --region $Region --update
 $jobEnvironment = $safeEnvironment + ",FRONTEND_APP_URL=$serviceUrl,CORS_ORIGINS=$serviceUrl"
 $refreshJob = "$ServiceName-refresh"
 $futureJob = "$ServiceName-future"
-$null = Invoke-Gcloud run jobs deploy $refreshJob --image $Image --region $Region --service-account $runtimeEmail --command python --args sync_job.py,--mode,refresh --set-env-vars $jobEnvironment --set-secrets $secretBindings --task-timeout 30m --max-retries 1
-$null = Invoke-Gcloud run jobs deploy $futureJob --image $Image --region $Region --service-account $runtimeEmail --command python --args sync_job.py,--mode,future --set-env-vars $jobEnvironment --set-secrets $secretBindings --task-timeout 30m --max-retries 1
+$refreshArgs = "--args=sync_job.py,--mode,refresh"
+$futureArgs = "--args=sync_job.py,--mode,future"
+$null = Invoke-Gcloud run jobs deploy $refreshJob --image $Image --region $Region --service-account $runtimeEmail --command=python $refreshArgs --set-env-vars $jobEnvironment --set-secrets $secretBindings --task-timeout 30m --max-retries 1
+$null = Invoke-Gcloud run jobs deploy $futureJob --image $Image --region $Region --service-account $runtimeEmail --command=python $futureArgs --set-env-vars $jobEnvironment --set-secrets $secretBindings --task-timeout 30m --max-retries 1
 
 $schedulerAccount = "$ServiceName-scheduler"
 $schedulerEmail = "$schedulerAccount@$ProjectId.iam.gserviceaccount.com"

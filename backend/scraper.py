@@ -63,11 +63,13 @@ class OTAScraper:
             raise
 
     def _from_apify(self, url: str, target_dates: list[str]) -> dict[str, ScrapeResult]:
-        token = self.settings.apify_api_token
+        # Secret Manager values may contain a trailing newline when they were
+        # entered from a terminal. HTTP authorization headers cannot contain it.
+        token = self.settings.apify_api_token.strip()
         ota_source = self.settings.source_for_url(url)
         if not ota_source or ota_source.status != "approved":
             raise DataCollectionError("OTA collection is not approved for this source")
-        actor_id = ota_source.actor_id
+        actor_id = ota_source.actor_id.strip()
         if not token or not actor_id:
             raise DataCollectionError("Apify token or OTA actor is not configured")
 

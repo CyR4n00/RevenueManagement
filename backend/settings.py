@@ -24,7 +24,7 @@ def _ota_status(name: str) -> str:
 
 def _sync_hours() -> tuple[int, ...]:
     """Return one or two Tokyo collection times, preserving the legacy setting."""
-    raw = os.getenv("DAILY_SYNC_HOURS", os.getenv("DAILY_SYNC_HOUR", "10"))
+    raw = os.getenv("DAILY_SYNC_HOURS", os.getenv("DAILY_SYNC_HOUR", "10")).replace(";", ",")
     try:
         hours = tuple(sorted({int(value.strip()) for value in raw.split(",") if value.strip()}))
     except ValueError as exc:
